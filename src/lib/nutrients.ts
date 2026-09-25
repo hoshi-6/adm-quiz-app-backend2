@@ -3,21 +3,38 @@
 // 設定画面から個別に上書きできる。
 
 export const NUTRIENT_KEYS = [
+  // 主要
   "energy",
   "protein",
   "fat",
+  "saturatedFat",
   "carbs",
   "fiber",
-  "calcium",
-  "iron",
-  "vitaminA",
-  "vitaminC",
-  "vitaminD",
   "salt",
+  // ミネラル
+  "potassium",
+  "calcium",
+  "magnesium",
+  "iron",
+  "zinc",
+  // ビタミン
+  "vitaminA",
+  "vitaminD",
+  "vitaminE",
+  "vitaminK",
+  "vitaminB1",
+  "vitaminB2",
+  "vitaminB6",
+  "vitaminB12",
+  "folate",
+  "vitaminC",
 ] as const;
 
 export type NutrientKey = (typeof NUTRIENT_KEYS)[number];
 export type Nutrients = Record<NutrientKey, number>;
+
+export type NutrientGroup = "main" | "mineral" | "vitamin";
+export const GROUP_LABELS: Record<NutrientGroup, string> = { main: "エネルギー・主要栄養素", mineral: "ミネラル", vitamin: "ビタミン" };
 
 export interface NutrientDef {
   key: NutrientKey;
@@ -25,30 +42,65 @@ export interface NutrientDef {
   unit: string;
   /** "min" = 目標以上とりたい / "max" = 上限を超えたくない */
   kind: "min" | "max";
+  group: NutrientGroup;
+  /** 小数点以下の桁数 */
+  digits: number;
 }
 
+const def = (key: NutrientKey, label: string, unit: string, group: NutrientGroup, digits: number, kind: "min" | "max" = "min"): NutrientDef => ({
+  key,
+  label,
+  unit,
+  kind,
+  group,
+  digits,
+});
+
 export const NUTRIENTS: Record<NutrientKey, NutrientDef> = {
-  energy: { key: "energy", label: "エネルギー", unit: "kcal", kind: "min" },
-  protein: { key: "protein", label: "たんぱく質", unit: "g", kind: "min" },
-  fat: { key: "fat", label: "脂質", unit: "g", kind: "min" },
-  carbs: { key: "carbs", label: "炭水化物", unit: "g", kind: "min" },
-  fiber: { key: "fiber", label: "食物繊維", unit: "g", kind: "min" },
-  calcium: { key: "calcium", label: "カルシウム", unit: "mg", kind: "min" },
-  iron: { key: "iron", label: "鉄", unit: "mg", kind: "min" },
-  vitaminA: { key: "vitaminA", label: "ビタミンA", unit: "µg", kind: "min" },
-  vitaminC: { key: "vitaminC", label: "ビタミンC", unit: "mg", kind: "min" },
-  vitaminD: { key: "vitaminD", label: "ビタミンD", unit: "µg", kind: "min" },
-  salt: { key: "salt", label: "食塩相当量", unit: "g", kind: "max" },
+  energy: def("energy", "エネルギー", "kcal", "main", 0),
+  protein: def("protein", "たんぱく質", "g", "main", 1),
+  fat: def("fat", "脂質", "g", "main", 1),
+  saturatedFat: def("saturatedFat", "飽和脂肪酸", "g", "main", 1, "max"),
+  carbs: def("carbs", "炭水化物", "g", "main", 1),
+  fiber: def("fiber", "食物繊維", "g", "main", 1),
+  salt: def("salt", "食塩相当量", "g", "main", 1, "max"),
+  potassium: def("potassium", "カリウム", "mg", "mineral", 0),
+  calcium: def("calcium", "カルシウム", "mg", "mineral", 0),
+  magnesium: def("magnesium", "マグネシウム", "mg", "mineral", 0),
+  iron: def("iron", "鉄", "mg", "mineral", 1),
+  zinc: def("zinc", "亜鉛", "mg", "mineral", 1),
+  vitaminA: def("vitaminA", "ビタミンA", "µg", "vitamin", 0),
+  vitaminD: def("vitaminD", "ビタミンD", "µg", "vitamin", 1),
+  vitaminE: def("vitaminE", "ビタミンE", "mg", "vitamin", 1),
+  vitaminK: def("vitaminK", "ビタミンK", "µg", "vitamin", 0),
+  vitaminB1: def("vitaminB1", "ビタミンB1", "mg", "vitamin", 2),
+  vitaminB2: def("vitaminB2", "ビタミンB2", "mg", "vitamin", 2),
+  vitaminB6: def("vitaminB6", "ビタミンB6", "mg", "vitamin", 2),
+  vitaminB12: def("vitaminB12", "ビタミンB12", "µg", "vitamin", 1),
+  folate: def("folate", "葉酸", "µg", "vitamin", 0),
+  vitaminC: def("vitaminC", "ビタミンC", "mg", "vitamin", 0),
 };
+
+export const NUTRIENT_GROUPS: { group: NutrientGroup; keys: NutrientKey[] }[] = (["main", "mineral", "vitamin"] as const).map((group) => ({
+  group,
+  keys: NUTRIENT_KEYS.filter((k) => NUTRIENTS[k].group === group),
+}));
 
 export function emptyNutrients(): Nutrients {
   return Object.fromEntries(NUTRIENT_KEYS.map((k) => [k, 0])) as Nutrients;
 }
 
-export function sumNutrients(list: Nutrients[]): Nutrients {
+/** 古い記録など、項目が欠けている栄養素データを 0 で補う */
+export function completeNutrients(n: Partial<Nutrients> | undefined): Nutrients {
+  const out = emptyNutrients();
+  for (const k of NUTRIENT_KEYS) out[k] = Number(n?.[k]) || 0;
+  return out;
+}
+
+export function sumNutrients(list: Partial<Nutrients>[]): Nutrients {
   const total = emptyNutrients();
   for (const n of list) {
-    for (const k of NUTRIENT_KEYS) total[k] += n[k] ?? 0;
+    for (const k of NUTRIENT_KEYS) total[k] += Number(n[k]) || 0;
   }
   return total;
 }
@@ -123,6 +175,20 @@ const IRON_FEMALE: ByBand = [6.0, 6.0, 6.0, 6.0, 5.5];
 const IRON_FEMALE_MENSTRUATION: ByBand = [10.0, 10.5, 10.5, 6.0, 5.5];
 /** ビタミンA 推奨量（µgRAE/日） */
 const VITAMIN_A = table([850, 900, 900, 850, 800], [650, 700, 700, 700, 650]);
+/** カリウム 目標量（mg/日以上） */
+const POTASSIUM = table([3000, 3000, 3000, 3000, 3000], [2600, 2600, 2600, 2600, 2600]);
+/** マグネシウム 推奨量（mg/日） */
+const MAGNESIUM = table([340, 380, 370, 350, 330], [280, 290, 290, 280, 270]);
+/** 亜鉛 推奨量（mg/日） */
+const ZINC = table([9.0, 9.5, 9.5, 9.0, 9.0], [7.5, 8.0, 8.0, 7.5, 7.0]);
+/** ビタミンE 目安量（mg/日） */
+const VITAMIN_E = table([6.5, 6.5, 6.5, 7.5, 7.0], [5.0, 6.0, 6.0, 7.0, 6.0]);
+/** ビタミンB1 推奨量（mg/日） */
+const VITAMIN_B1 = table([1.1, 1.2, 1.1, 1.0, 1.0], [0.8, 0.9, 0.8, 0.8, 0.7]);
+/** ビタミンB2 推奨量（mg/日） */
+const VITAMIN_B2 = table([1.6, 1.7, 1.6, 1.4, 1.4], [1.2, 1.2, 1.2, 1.1, 1.1]);
+/** ビタミンB6 推奨量（mg/日） */
+const VITAMIN_B6 = table([1.5, 1.5, 1.5, 1.4, 1.4], [1.2, 1.2, 1.2, 1.2, 1.2]);
 
 /** 推定エネルギー必要量。体重があれば「基礎代謝基準値 × 体重 × 身体活動レベル」、なければ参照体位での値 */
 export function estimateEnergy(p: Profile): number {
@@ -148,9 +214,21 @@ export function calcTargets(p: Profile): Nutrients {
     fiber: FIBER[p.sex][b],
     calcium: CALCIUM[p.sex][b],
     iron: male ? IRON_MALE[b] : (p.menstruation ?? true) ? IRON_FEMALE_MENSTRUATION[b] : IRON_FEMALE[b],
+    // 目標量（7%エネルギー以下）
+    saturatedFat: Math.round(((energy * 0.07) / 9) * 10) / 10,
+    potassium: POTASSIUM[p.sex][b],
+    magnesium: MAGNESIUM[p.sex][b],
+    zinc: ZINC[p.sex][b],
     vitaminA: VITAMIN_A[p.sex][b],
-    vitaminC: 100,
     vitaminD: 9.0,
+    vitaminE: VITAMIN_E[p.sex][b],
+    vitaminK: 150,
+    vitaminB1: VITAMIN_B1[p.sex][b],
+    vitaminB2: VITAMIN_B2[p.sex][b],
+    vitaminB6: VITAMIN_B6[p.sex][b],
+    vitaminB12: 4.0,
+    folate: 240,
+    vitaminC: 100,
     // 目標量（未満）
     salt: male ? 7.5 : 6.5,
   };
@@ -184,7 +262,6 @@ export function analyze(intake: Nutrients, targets: Nutrients) {
   return { deficits, excesses };
 }
 
-export function fmt(value: number, key: NutrientKey): string {
-  const digits = key === "energy" || key === "calcium" || key === "vitaminA" ? 0 : 1;
-  return value.toFixed(digits);
+export function fmt(value: number | undefined, key: NutrientKey): string {
+  return (Number(value) || 0).toFixed(NUTRIENTS[key].digits);
 }

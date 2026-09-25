@@ -2,14 +2,14 @@
 
 import { useState, type FormEvent } from "react";
 import { toast } from "@/lib/toast";
-import { NutrientBars } from "@/components/NutrientBars";
-import { Button, Card, ErrorNote, Field, Input, PageHeader, Select, Spinner, Textarea, cx } from "@/components/ui";
+import { NutrientBars, NutrientTable } from "@/components/NutrientBars";
+import { Badge, Button, Card, ErrorNote, Field, Input, OptionalNumberInput, PageHeader, Select, Spinner, Textarea, cx } from "@/components/ui";
 import { PhotoButton } from "@/components/PhotoButton";
 import type { EstimateResult, ImageInput } from "@/lib/ai/schemas";
 import { MEAL_LABELS, addMeals, deleteMeal, todayStr, type MealType } from "@/lib/db";
 import { callApi, useDayIntake } from "@/lib/hooks";
 import { imageFileToInput } from "@/lib/image";
-import { NUTRIENT_KEYS, NUTRIENTS, emptyNutrients, fmt, type Nutrients } from "@/lib/nutrients";
+import { GROUP_LABELS, NUTRIENT_GROUPS, NUTRIENTS, completeNutrients, emptyNutrients, type Nutrients } from "@/lib/nutrients";
 
 function guessMealType(): MealType {
   const h = new Date().getHours();
@@ -80,7 +80,7 @@ export default function MealsPage() {
 
   return (
     <>
-      <PageHeader title="食事記録" description="食べたものを文章で入力すると、AIが栄養素を推定します" />
+      <PageHeader title="食事記録" description="食べたものを文章や写真で入力すると、AIが栄養素を調べます。市販品は公式の栄養成分表示を探します" />
 
       <div className="grid gap-4 md:grid-cols-[1fr_320px]">
         <div className="flex flex-col gap-4">
@@ -144,7 +144,7 @@ export default function MealsPage() {
                 <ErrorNote message={error} />
                 <Button type="submit" disabled={loading || (!text.trim() && !photo)} className="w-full md:w-auto">
                   {loading ? <Spinner /> : null}
-                  {loading ? "推定中…" : "栄養素を推定する"}
+                  {loading ? "調べています…（市販品は公式の表示を探します）" : "栄養素を調べる"}
                 </Button>
               </form>
             ) : (
@@ -157,20 +157,29 @@ export default function MealsPage() {
                     <Input value={manual.amount} placeholder="例: 1人前" onChange={(e) => setManual({ ...manual, amount: e.target.value })} />
                   </Field>
                 </div>
-                <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                  {NUTRIENT_KEYS.map((k) => (
-                    <Field key={k} label={`${NUTRIENTS[k].label} (${NUTRIENTS[k].unit})`}>
-                      <Input
-                        type="number"
-                        inputMode="decimal"
-                        min="0"
-                        step="any"
-                        value={manual.nutrients[k] || ""}
-                        onChange={(e) => setManual({ ...manual, nutrients: { ...manual.nutrients, [k]: Number(e.target.value) || 0 } })}
-                      />
-                    </Field>
-                  ))}
-                </div>
+                {NUTRIENT_GROUPS.map(({ group, keys }) => {
+                  const fields = (
+                    <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                      {keys.map((k) => (
+                        <Field key={k} label={`${NUTRIENTS[k].label} (${NUTRIENTS[k].unit})`}>
+                          <OptionalNumberInput
+                            value={manual.nutrients[k] || null}
+                            onValueChange={(v) => setManual({ ...manual, nutrients: { ...manual.nutrients, [k]: v ?? 0 } })}
+                          />
+                        </Field>
+                      ))}
+                    </div>
+                  );
+                  // 主要な栄養素はそのまま、ミネラル・ビタミンは必要なときだけ開く
+                  return group === "main" ? (
+                    <div key={group}>{fields}</div>
+                  ) : (
+                    <details key={group}>
+                      <summary className="cursor-pointer text-sm text-brand">{GROUP_LABELS[group]}（任意）</summary>
+                      <div className="mt-2">{fields}</div>
+                    </details>
+                  );
+                })}
                 <Button type="submit">記録する</Button>
               </form>
             )}
@@ -191,13 +200,18 @@ export default function MealsPage() {
                       <span className="min-w-0 flex-1">
                         <span className="font-medium">{d.name}</span>
                         <span className="ml-2 text-sm text-muted">{d.amount}</span>
-                        <span className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-xs text-muted">
-                          {NUTRIENT_KEYS.map((k) => (
-                            <span key={k}>
-                              {NUTRIENTS[k].label} {fmt(d.nutrients[k], k)}
-                              {NUTRIENTS[k].unit}
-                            </span>
-                          ))}
+                        <span className="mt-1 flex flex-wrap items-center gap-2">
+                          {d.basis === "web" && <Badge tone="good">公式サイトの表示</Badge>}
+                          {d.basis === "label" && <Badge tone="good">写真の表示から</Badge>}
+                          {d.basis === "estimate" && <Badge>成分表からの推定</Badge>}
+                          {d.source && /^https?:\/\//.test(d.source) && (
+                            <a href={d.source} target="_blank" rel="noopener noreferrer" className="text-xs text-brand underline" onClick={(e) => e.stopPropagation()}>
+                              出典を見る
+                            </a>
+                          )}
+                        </span>
+                        <span className="mt-1 block">
+                          <NutrientTable nutrients={completeNutrients(d.nutrients)} />
                         </span>
                       </span>
                     </label>
@@ -216,7 +230,7 @@ export default function MealsPage() {
             </Card>
           )}
 
-          <Card title={`${date === todayStr() ? "今日" : date} の記録`}>
+          <Card title={`${date === todayStr() ? "今日" : date}の記録`}>
             {grouped.length === 0 ? (
               <p className="text-sm text-muted">記録はまだありません</p>
             ) : (

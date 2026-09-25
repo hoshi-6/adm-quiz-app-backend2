@@ -5,7 +5,7 @@ import { useRef, useState } from "react";
 import { Button, Card, ErrorNote, Field, OptionalNumberInput, PageHeader, Select, Textarea } from "@/components/ui";
 import { clearLocal, db, defaultSettings, exportAll, importAll, saveSettings, todayStr, type Settings } from "@/lib/db";
 import { forgetPasscode, syncNow, useSyncState } from "@/lib/sync";
-import { DEFAULT_AGE, NUTRIENT_KEYS, NUTRIENTS, calcTargets, type ActivityLevel, type NutrientKey, type Profile, type Sex } from "@/lib/nutrients";
+import { DEFAULT_AGE, GROUP_LABELS, NUTRIENT_GROUPS, NUTRIENT_KEYS, NUTRIENTS, calcTargets, type ActivityLevel, type NutrientKey, type Profile, type Sex } from "@/lib/nutrients";
 import { toast } from "@/lib/toast";
 
 export default function SettingsPage() {
@@ -32,7 +32,8 @@ function toProfile(p: Draft["profile"]): Profile {
 function SettingsForm({ initial }: { initial: Settings }) {
   const initialDraft: Draft = {
     profile: { weightKg: null, menstruation: true, ...initial.profile },
-    targets: initial.targets,
+    // 項目が増える前に保存した設定には、新しい栄養素の目標値がないので基準値で補う
+    targets: { ...calcTargets(toProfile({ weightKg: null, menstruation: true, ...initial.profile })), ...initial.targets },
     preferences: initial.preferences,
   };
   const [s, setS] = useState<Draft>(initialDraft);
@@ -172,15 +173,20 @@ function SettingsForm({ initial }: { initial: Settings }) {
             </button>
           }
         >
-          <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-            {NUTRIENT_KEYS.map((k) => (
-              <Field key={k} label={`${NUTRIENTS[k].label}${NUTRIENTS[k].kind === "max" ? "（上限）" : ""} ${NUTRIENTS[k].unit}`}>
-                <OptionalNumberInput value={s.targets[k]} placeholder="空欄なら基準値" onValueChange={(v) => setS({ ...s, targets: { ...s.targets, [k]: v } })} />
-              </Field>
-            ))}
-          </div>
+          {NUTRIENT_GROUPS.map(({ group, keys }) => (
+            <div key={group} className="mb-4">
+              <h3 className="mb-2 text-xs font-semibold text-muted">{GROUP_LABELS[group]}</h3>
+              <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
+                {keys.map((k) => (
+                  <Field key={k} label={`${NUTRIENTS[k].label}${NUTRIENTS[k].kind === "max" ? "（上限）" : ""} ${NUTRIENTS[k].unit}`}>
+                    <OptionalNumberInput value={s.targets[k]} placeholder="空欄なら基準値" onValueChange={(v) => setS({ ...s, targets: { ...s.targets, [k]: v } })} />
+                  </Field>
+                ))}
+              </div>
+            </div>
+          ))}
           <p className="mt-3 text-xs text-muted">
-            たんぱく質は「推奨量」と「目標量（エネルギー比。50歳以上は下限が14〜15%）の下限」の多い方、脂質・炭水化物は目標量（20〜30%・50〜65%）の中央値、食塩は目標量（未満）です。
+            たんぱく質は「推奨量」と「目標量（エネルギー比。50歳以上は下限が14〜15%）の下限」の多い方、脂質・炭水化物は目標量（20〜30%・50〜65%）の中央値、食塩・飽和脂肪酸（エネルギーの7%以下）は目標量、ミネラル・ビタミンは推奨量（ビタミンD・E・K・B12は目安量、カリウムは目標量）です。
           </p>
           <div className="mt-3 flex justify-end">
             <Button onClick={() => save()}>保存</Button>

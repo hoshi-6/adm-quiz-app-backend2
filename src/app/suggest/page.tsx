@@ -8,7 +8,8 @@ import { Badge, Button, Card, ErrorNote, Field, NumberInput, PageHeader, Select,
 import { SUGGEST_STYLES, type SuggestRequest, type Suggestion } from "@/lib/ai/schemas";
 import { MEAL_LABELS, addMeals, consumePantry, daysUntil, db, todayStr, type MealType, type PantryItem } from "@/lib/db";
 import { callApi, useDayIntake, useSettings } from "@/lib/hooks";
-import { NUTRIENT_KEYS, NUTRIENTS, fmt } from "@/lib/nutrients";
+import { NutrientTable } from "@/components/NutrientBars";
+import { NUTRIENT_KEYS, NUTRIENTS, completeNutrients, fmt } from "@/lib/nutrients";
 
 const STORAGE_KEY = "gohan-navi:last-suggestion-v2";
 
@@ -210,7 +211,7 @@ function SuggestionCard({ s, servings, mealType, pantry }: { s: Suggestion; serv
   }
 
   async function save() {
-    await addMeals([{ date: todayStr(), mealType, name: s.title, amount: "1人前", nutrients: s.nutrientsPerServing }]);
+    await addMeals([{ date: todayStr(), mealType, name: s.title, amount: "1人前", nutrients: completeNutrients(s.nutrientsPerServing) }]);
     const used = deduct.filter((d) => d.checked);
     await consumePantry(used.map((d) => ({ id: d.id, amount: d.amount })));
     setStep("saved");
@@ -252,17 +253,8 @@ function SuggestionCard({ s, servings, mealType, pantry }: { s: Suggestion; serv
         </ol>
       </details>
 
-      <div className="mb-3 grid grid-cols-2 gap-x-3 gap-y-0.5 text-xs text-muted">
-        <span className="col-span-2 mb-0.5 font-medium">1人前あたり</span>
-        {NUTRIENT_KEYS.map((k) => (
-          <span key={k} className="flex justify-between">
-            <span>{NUTRIENTS[k].label}</span>
-            <span className="tabular-nums">
-              {fmt(s.nutrientsPerServing[k], k)}
-              {NUTRIENTS[k].unit}
-            </span>
-          </span>
-        ))}
+      <div className="mb-3">
+        <NutrientTable nutrients={completeNutrients(s.nutrientsPerServing)} caption="1人前あたり" />
       </div>
 
       {step === "idle" && (

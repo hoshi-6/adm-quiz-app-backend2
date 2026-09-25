@@ -5,7 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { Badge, Card, PageHeader, cx } from "@/components/ui";
 import { db, todayStr } from "@/lib/db";
 import { useSettings } from "@/lib/hooks";
-import { NUTRIENT_KEYS, NUTRIENTS, emptyNutrients, fmt, sumNutrients, type NutrientKey, type Nutrients } from "@/lib/nutrients";
+import { GROUP_LABELS, NUTRIENT_GROUPS, NUTRIENT_KEYS, NUTRIENTS, emptyNutrients, fmt, sumNutrients, type NutrientKey, type Nutrients } from "@/lib/nutrients";
 
 const RANGES = [
   { days: 7, label: "7日" },
@@ -107,8 +107,14 @@ export default function TrendsPage() {
                 <th className="py-1 text-right font-normal">達成率</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-line">
-              {NUTRIENT_KEYS.map((k) => {
+            {NUTRIENT_GROUPS.map(({ group, keys }) => (
+            <tbody key={group} className="divide-y divide-line">
+              <tr>
+                <th colSpan={4} className="pb-1 pt-3 text-left text-xs font-semibold text-muted">
+                  {GROUP_LABELS[group]}
+                </th>
+              </tr>
+              {keys.map((k) => {
                 const def = NUTRIENTS[k];
                 const pct = targets[k] ? Math.round((average[k] / targets[k]) * 100) : 0;
                 const status = def.kind === "max" ? (pct > 100 ? "over" : "ok") : pct < 60 ? "low" : pct < 90 ? "short" : "ok";
@@ -137,6 +143,7 @@ export default function TrendsPage() {
                 );
               })}
             </tbody>
+            ))}
           </table>
         )}
       </Card>

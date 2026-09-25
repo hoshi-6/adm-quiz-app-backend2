@@ -2,11 +2,13 @@
 
 import { useLiveQuery } from "dexie-react-hooks";
 import { db, defaultSettings, todayStr, type Settings } from "./db";
-import { analyze, sumNutrients } from "./nutrients";
+import { analyze, calcTargets, sumNutrients } from "./nutrients";
 import { getPasscode } from "./sync";
 
 export function useSettings(): Settings {
-  return useLiveQuery(() => db.settings.get("main"), []) ?? defaultSettings();
+  const s = useLiveQuery(() => db.settings.get("main"), []) ?? defaultSettings();
+  // 項目が増える前に保存した設定には、新しい栄養素の目標値がないので基準値で補う
+  return { ...s, targets: { ...calcTargets(s.profile), ...s.targets } };
 }
 
 export function useDayIntake(date = todayStr()) {

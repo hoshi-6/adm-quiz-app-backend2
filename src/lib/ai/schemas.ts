@@ -1,19 +1,14 @@
 // AI とのやり取りに使うスキーマ。サーバー（構造化出力）とクライアント（型）で共有する。
 import { z } from "zod";
+import { NUTRIENT_KEYS, NUTRIENTS, type NutrientKey } from "../nutrients";
 
-export const NutrientsSchema = z.object({
-  energy: z.number().describe("エネルギー kcal"),
-  protein: z.number().describe("たんぱく質 g"),
-  fat: z.number().describe("脂質 g"),
-  carbs: z.number().describe("炭水化物 g"),
-  fiber: z.number().describe("食物繊維 g"),
-  calcium: z.number().describe("カルシウム mg"),
-  iron: z.number().describe("鉄 mg"),
-  vitaminA: z.number().describe("ビタミンA µgRAE"),
-  vitaminC: z.number().describe("ビタミンC mg"),
-  vitaminD: z.number().describe("ビタミンD µg"),
-  salt: z.number().describe("食塩相当量 g"),
-});
+/** 栄養素（nutrients.ts の一覧から作る）。単位は説明に書いて AI に伝える */
+export const NutrientsSchema = z.object(
+  Object.fromEntries(NUTRIENT_KEYS.map((k) => [k, z.number().describe(`${NUTRIENTS[k].label}（${NUTRIENTS[k].unit === "µg" && k === "vitaminA" ? "µgRAE" : NUTRIENTS[k].unit}）`)])) as Record<
+    NutrientKey,
+    z.ZodNumber
+  >,
+);
 
 /** 端末で縮小した写真（base64）。Vercel のリクエスト上限（4.5MB）に収まる大きさまで */
 export const ImageSchema = z.object({
@@ -27,9 +22,11 @@ export type ImageInput = z.infer<typeof ImageSchema>;
 export const EstimateResultSchema = z.object({
   items: z.array(
     z.object({
-      name: z.string().describe("料理・食品名"),
-      amount: z.string().describe("量の目安（例: 茶碗1杯 150g）"),
-      nutrients: NutrientsSchema.describe("この量あたりの推定栄養素"),
+      name: z.string().describe("料理・食品名（市販品はメーカー名と商品名）"),
+      amount: z.string().describe("食べた量（ユーザーが書いた量をそのまま。例: 1袋 21g、茶碗1杯 150g）"),
+      nutrients: NutrientsSchema.describe("食べた量あたりの栄養素"),
+      basis: z.enum(["label", "web", "estimate"]).describe("label=写真の栄養成分表示、web=Web で見つけた公式の表示、estimate=食品成分表などからの推定"),
+      source: z.string().nullable().describe("basis が web のときは参照したページの URL。それ以外は null"),
     }),
   ),
   note: z.string().describe("推定の前提や注意点を一言で"),

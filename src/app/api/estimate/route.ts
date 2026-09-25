@@ -1,15 +1,21 @@
-import { generateStructured, imageBlock } from "@/lib/ai/claude";
+import { generateWithWebSearch, imageBlock } from "@/lib/ai/claude";
 import { checkPasscode, errorResponse } from "@/lib/server/http";
 import { EstimateRequestSchema, EstimateResultSchema } from "@/lib/ai/schemas";
 
-const SYSTEM = `あなたは管理栄養士です。ユーザーが食べたものの説明から、料理・食品ごとに分けて栄養素を推定します。
-- 日本食品標準成分表（八訂）の値を目安に、一般的な家庭料理・市販品の量で推定してください。
-- 量が書かれていなければ、日本の成人が一般的に食べる1人前を想定し、amount にその前提を書いてください。
+const SYSTEM = `あなたは管理栄養士です。ユーザーが食べたものの説明から、料理・食品ごとに分けて栄養素を求め、最後に必ず record_meal ツールで記録します。
+
+量について（最重要）:
+- ユーザーが書いた量（g・個数・袋数など）を必ずそのまま使ってください。勝手に別の量に置き換えてはいけません。
+- 量が書かれていなければ、市販品は 1 袋（1 個）の内容量、料理は日本の成人の一般的な 1 人前とし、amount にその前提を書きます。
+
+栄養素の求め方:
+- 市販品（お菓子・食玩・飲料・冷凍食品・コンビニ商品など）や外食チェーンのメニューは、web_search でメーカーや店の公式サイトの栄養成分表示を探し、その値を使ってください（basis=web、source に URL）。表示が 1 袋あたりなら、食べた量に合わせて比例計算します。
+- 写真に栄養成分表示が写っていれば、その値を使います（basis=label）。
+- ほかの食事記録アプリの画面の写真なら、表示されている値を使います（basis=label）。
+- 一般的な食材・家庭料理は、日本食品標準成分表（八訂）を目安に推定します（basis=estimate）。無理に検索しなくて構いません。
+- 表示にない栄養素（ビタミン・ミネラルなど）は、原材料から推定して埋めます。
 - 数値は単位どおりの実数で返してください（エネルギー kcal、ビタミンA µgRAE など）。
-- 写真が付いている場合:
-  - 料理の写真なら、写っている料理と量を見積もってください。文章の説明があればそちらを優先します。
-  - ほかの食事記録アプリの画面（スクリーンショット）なら、記録されている料理と量を読み取ってください。画面に栄養素の数値が表示されていれば、その値を使ってください。
-  - 食品のパッケージや栄養成分表示なら、その表示の値を使ってください。`;
+- note には、公式表示が見つからず推定にした食品などの注意点を一言で書きます。`
 
 // AI の応答には数十秒かかることがあるため、実行時間の上限を延ばす（Vercel 無料プランの上限内）
 export const maxDuration = 300;
@@ -23,10 +29,13 @@ export async function POST(req: Request) {
     }
     const { text, image } = parsed.data;
     const prompt = text.trim() ? `今日食べたもの:\n${text}` : "写真の食事の栄養素を推定してください。";
-    const result = await generateStructured({
+    const result = await generateWithWebSearch({
       system: SYSTEM,
       user: image ? [imageBlock(image), { type: "text", text: prompt }] : prompt,
       schema: EstimateResultSchema,
+      toolName: "record_meal",
+      toolDescription: "食べたものと栄養素を記録する。調べ終わったら最後に必ず1回だけ呼ぶ。",
+      maxSearches: 4,
       effort: "low",
     });
     return Response.json(result);
