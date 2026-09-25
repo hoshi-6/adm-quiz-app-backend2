@@ -3,7 +3,7 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { useState, type FormEvent } from "react";
 import { Badge, Button, Card, Field, Input, PageHeader, Select, cx } from "@/components/ui";
-import { addPantryItems, daysUntil, db, updatePantryItem, type PantryCategory, type PantryItem } from "@/lib/db";
+import { addPantryItems, daysUntil, db, deletePantryItem, updatePantryItem, type PantryCategory, type PantryItem } from "@/lib/db";
 
 const UNITS = ["個", "g", "kg", "ml", "L", "本", "枚", "パック", "袋", "玉", "束", "少々"];
 
@@ -55,7 +55,7 @@ export default function PantryPage() {
   async function changeQty(item: PantryItem, delta: number) {
     const quantity = Math.max(0, Math.round((item.quantity + delta) * 100) / 100);
     if (quantity === 0 && !confirm(`「${item.name}」を使い切りましたか？在庫から削除します。`)) return;
-    if (quantity === 0) await db.pantry.delete(item.id!);
+    if (quantity === 0) await deletePantryItem(item.id!);
     else await updatePantryItem(item.id!, { quantity });
   }
 
@@ -137,7 +137,7 @@ export default function PantryPage() {
                 <Button variant="secondary" className="h-9 w-9 px-0" aria-label="増やす" onClick={() => changeQty(item, step(item.unit))}>
                   ＋
                 </Button>
-                <Button variant="danger" className="h-9 px-2" onClick={() => db.pantry.delete(item.id!)}>
+                <Button variant="danger" className="h-9 px-2" onClick={() => deletePantryItem(item.id!)}>
                   削除
                 </Button>
               </div>

@@ -1,4 +1,5 @@
-import { checkPasscode, errorResponse, generateStructured } from "@/lib/ai/claude";
+import { generateStructured } from "@/lib/ai/claude";
+import { checkPasscode, errorResponse } from "@/lib/server/http";
 import { SuggestRequestSchema, SuggestResultSchema, type SuggestRequest } from "@/lib/ai/schemas";
 
 const SYSTEM = `あなたは家庭料理に詳しい管理栄養士です。家にある食材・調味料と、今日の栄養摂取状況をもとに、次の食事の献立を3案提案します。
@@ -48,6 +49,9 @@ ${status}
 ## 家にある食材・調味料
 ${pantry}`;
 }
+
+// AI の応答には数十秒かかることがあるため、実行時間の上限を延ばす（Vercel 無料プランの上限内）
+export const maxDuration = 300;
 
 export async function POST(req: Request) {
   try {

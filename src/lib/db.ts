@@ -1,15 +1,20 @@
-// 端末内（IndexedDB）にデータを保存する。サーバーには個人データを置かない。
+// 端末内（IndexedDB）のデータ。画面はここを読み書きし、変更は sync.ts がクラウドと同期する。
+// 書き込みは必ずこのファイルの関数を通す（同期用の uid / updatedAt / dirty を付けるため）。
 import Dexie, { type EntityTable } from "dexie";
-import {
-  DEFAULT_PROFILE,
-  calcTargets,
-  type Nutrients,
-  type Profile,
-} from "./nutrients";
+import { DEFAULT_PROFILE, calcTargets, type Nutrients, type Profile } from "./nutrients";
+
+/** 同期対象レコードの共通フィールド */
+interface Syncable {
+  /** 端末をまたいで同じレコードを識別する ID */
+  uid: string;
+  updatedAt: number;
+  /** 1 = まだクラウドに送っていない変更がある */
+  dirty: 0 | 1;
+}
 
 export type PantryCategory = "ingredient" | "seasoning";
 
-export interface PantryItem {
+export interface PantryItem extends Syncable {
   id?: number;
   name: string;
   category: PantryCategory;
@@ -17,7 +22,6 @@ export interface PantryItem {
   unit: string;
   /** YYYY-MM-DD */
   expiresOn?: string;
-  updatedAt: number;
 }
 
 export type MealType = "breakfast" | "lunch" | "dinner" | "snack";
@@ -29,7 +33,7 @@ export const MEAL_LABELS: Record<MealType, string> = {
   snack: "間食",
 };
 
-export interface MealEntry {
+export interface MealEntry extends Syncable {
   id?: number;
   /** YYYY-MM-DD */
   date: string;
@@ -40,20 +44,35 @@ export interface MealEntry {
   createdAt: number;
 }
 
-export interface Settings {
+export interface Settings extends Syncable {
   id: "main";
   profile: Profile;
   targets: Nutrients;
   /** 苦手な食材・アレルギー・好みなど、AI提案時に伝えるメモ */
   preferences: string;
-  /** サーバー側で APP_PASSCODE を設定した場合に送るパスコード */
-  passcode: string;
+}
+
+export type Collection = "pantry" | "meals" | "settings";
+
+/** 削除したレコード。次の同期でクラウドにも削除を伝える */
+export interface Tombstone {
+  uid: string;
+  collection: Collection;
+  deletedAt: number;
+}
+
+/** 端末だけに保存する値（パスコード、同期位置など） */
+export interface Meta {
+  key: string;
+  value: string | number;
 }
 
 export const db = new Dexie("nutri-pantry") as Dexie & {
   pantry: EntityTable<PantryItem, "id">;
   meals: EntityTable<MealEntry, "id">;
   settings: EntityTable<Settings, "id">;
+  tombstones: EntityTable<Tombstone, "uid">;
+  meta: EntityTable<Meta, "key">;
 };
 
 db.version(1).stores({
@@ -62,34 +81,127 @@ db.version(1).stores({
   settings: "id",
 });
 
-/** 食事を記録する（createdAt は追加順を保つよう自動で付ける） */
-export async function addMeals(entries: Omit<MealEntry, "id" | "createdAt">[]) {
-  const now = Date.now();
-  await db.meals.bulkAdd(entries.map((e, i) => ({ ...e, createdAt: now + i })));
+// v2: クラウド同期に対応
+db.version(2)
+  .stores({
+    pantry: "++id, &uid, name, category, expiresOn, dirty",
+    meals: "++id, &uid, date, mealType, dirty",
+    settings: "id",
+    tombstones: "uid",
+    meta: "key",
+  })
+  .upgrade(async (tx) => {
+    const markSyncable = (r: Record<string, unknown>) => {
+      r.uid ??= newUid();
+      r.updatedAt ??= (r.createdAt as number) ?? Date.now();
+      r.dirty = 1;
+    };
+    await tx.table("pantry").toCollection().modify(markSyncable);
+    await tx.table("meals").toCollection().modify(markSyncable);
+    // パスコードは端末だけに置くので、設定から meta へ移す
+    const s = await tx.table("settings").get("main");
+    if (s) {
+      if (s.passcode) await tx.table("meta").put({ key: "passcode", value: s.passcode });
+      delete s.passcode;
+      s.uid = "main";
+      markSyncable(s);
+      await tx.table("settings").put(s);
+    }
+  });
+
+/** crypto.randomUUID は HTTPS 以外で使えないため、getRandomValues で作る */
+export function newUid(): string {
+  const b = crypto.getRandomValues(new Uint8Array(16));
+  return Array.from(b, (x) => x.toString(16).padStart(2, "0")).join("");
 }
 
-export async function updatePantryItem(id: number, changes: Partial<Omit<PantryItem, "id" | "updatedAt">>) {
-  await db.pantry.update(id, { ...changes, updatedAt: Date.now() });
+// ---- 変更通知（sync.ts が購読して、少し待ってから同期する） ----
+
+const listeners = new Set<() => void>();
+export function onLocalChange(fn: () => void) {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+}
+function changed() {
+  listeners.forEach((fn) => fn());
 }
 
-export async function addPantryItems(items: Omit<PantryItem, "id" | "updatedAt">[]) {
+// ---- 書き込み用の関数 ----
+
+type NewRecord<T> = Omit<T, "id" | "uid" | "updatedAt" | "dirty">;
+
+export async function addMeals(entries: Omit<NewRecord<MealEntry>, "createdAt">[]) {
   const now = Date.now();
-  await db.pantry.bulkAdd(items.map((i) => ({ ...i, updatedAt: now })));
+  // createdAt は追加順を保つよう 1ms ずつずらす
+  await db.meals.bulkAdd(entries.map((e, i) => ({ ...e, uid: newUid(), createdAt: now + i, updatedAt: now, dirty: 1 as const })));
+  changed();
+}
+
+export async function deleteMeal(id: number) {
+  await deleteRecord("meals", id);
+}
+
+export async function addPantryItems(items: NewRecord<PantryItem>[]) {
+  const now = Date.now();
+  await db.pantry.bulkAdd(items.map((i) => ({ ...i, uid: newUid(), updatedAt: now, dirty: 1 as const })));
+  changed();
+}
+
+export async function updatePantryItem(id: number, changes: Partial<NewRecord<PantryItem>>) {
+  await db.pantry.update(id, { ...changes, updatedAt: Date.now(), dirty: 1 });
+  changed();
+}
+
+export async function deletePantryItem(id: number) {
+  await deleteRecord("pantry", id);
+}
+
+async function deleteRecord(collection: "pantry" | "meals", id: number) {
+  const table = db.table<PantryItem | MealEntry, number>(collection);
+  await db.transaction("rw", table, db.tombstones, async () => {
+    const rec = await table.get(id);
+    if (!rec) return;
+    await table.delete(id);
+    await db.tombstones.put({ uid: rec.uid, collection, deletedAt: Date.now() });
+  });
+  changed();
+}
+
+export type SettingsInput = Pick<Settings, "profile" | "targets" | "preferences">;
+
+export async function saveSettings(s: SettingsInput) {
+  await db.settings.put({ ...s, id: "main", uid: "main", updatedAt: Date.now(), dirty: 1 });
+  changed();
 }
 
 export function defaultSettings(): Settings {
   return {
     id: "main",
+    uid: "main",
     profile: DEFAULT_PROFILE,
     targets: calcTargets(DEFAULT_PROFILE),
     preferences: "",
-    passcode: "",
+    // 未保存の初期値。クラウドに設定があればそちらが優先される
+    updatedAt: 0,
+    dirty: 0,
   };
 }
 
 export async function getSettings(): Promise<Settings> {
   return (await db.settings.get("main")) ?? defaultSettings();
 }
+
+// ---- 端末だけの値 ----
+
+export async function getMeta<T extends string | number>(key: string): Promise<T | undefined> {
+  return (await db.meta.get(key))?.value as T | undefined;
+}
+
+export async function setMeta(key: string, value: string | number) {
+  await db.meta.put({ key, value });
+}
+
+// ---- 日付 ----
 
 export function todayStr(d = new Date()): string {
   const y = d.getFullYear();
@@ -104,23 +216,60 @@ export function daysUntil(date: string): number {
   return Math.round((target.getTime() - today.getTime()) / 86_400_000);
 }
 
-// 端末間の移行・バックアップ用
+// ---- バックアップ ----
+
+const strip = <T extends { id?: unknown; dirty: 0 | 1 }>({ id: _id, dirty: _dirty, ...rest }: T) => rest;
+
 export async function exportAll() {
   return {
-    version: 1,
+    version: 2,
     exportedAt: new Date().toISOString(),
-    pantry: await db.pantry.toArray(),
-    meals: await db.meals.toArray(),
-    settings: await db.settings.toArray(),
+    pantry: (await db.pantry.toArray()).map(strip),
+    meals: (await db.meals.toArray()).map(strip),
+    settings: (await db.settings.toArray()).map(strip),
   };
 }
 
-export async function importAll(data: Awaited<ReturnType<typeof exportAll>>) {
-  if (data?.version !== 1) throw new Error("対応していないバックアップ形式です");
-  await db.transaction("rw", db.pantry, db.meals, db.settings, async () => {
-    await Promise.all([db.pantry.clear(), db.meals.clear(), db.settings.clear()]);
-    await db.pantry.bulkAdd(data.pantry);
-    await db.meals.bulkAdd(data.meals);
-    await db.settings.bulkPut(data.settings);
+type Backup = {
+  version: number;
+  pantry: Partial<PantryItem>[];
+  meals: Partial<MealEntry>[];
+  settings: Partial<Settings>[];
+};
+
+/** バックアップを取り込む。同じレコード（uid が一致）は上書きし、それ以外は追加する */
+export async function importAll(data: Backup) {
+  if (data?.version !== 1 && data?.version !== 2) throw new Error("対応していないバックアップ形式です");
+  const now = Date.now();
+  const prep = <T extends { uid?: string; createdAt?: number }>({ id: _id, ...r }: T & { id?: unknown }) => ({
+    ...r,
+    uid: r.uid ?? newUid(),
+    updatedAt: now,
+    dirty: 1 as const,
   });
+  await db.transaction("rw", db.pantry, db.meals, db.settings, async () => {
+    for (const [table, rows] of [
+      [db.pantry, data.pantry],
+      [db.meals, data.meals],
+    ] as const) {
+      for (const row of rows ?? []) {
+        const rec = prep(row);
+        const existing = await table.where("uid").equals(rec.uid).first();
+        await table.put({ ...rec, id: existing?.id } as never);
+      }
+    }
+    const s = data.settings?.[0];
+    if (s?.profile && s.targets) {
+      await db.settings.put({ id: "main", uid: "main", profile: s.profile, targets: s.targets, preferences: s.preferences ?? "", updatedAt: now, dirty: 1 });
+    }
+  });
+  changed();
+}
+
+/** この端末のデータだけを消す（クラウド同期中なら、次の同期でクラウドから取り直す） */
+export async function clearLocal() {
+  const passcode = await getMeta<string>("passcode");
+  await db.delete();
+  await db.open();
+  if (passcode) await setMeta("passcode", passcode);
 }

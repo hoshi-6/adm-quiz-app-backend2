@@ -3,6 +3,7 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { db, defaultSettings, todayStr, type Settings } from "./db";
 import { analyze, sumNutrients } from "./nutrients";
+import { getPasscode } from "./sync";
 
 export function useSettings(): Settings {
   return useLiveQuery(() => db.settings.get("main"), []) ?? defaultSettings();
@@ -17,7 +18,8 @@ export function useDayIntake(date = todayStr()) {
 }
 
 /** 自前の API ルートを呼ぶ。エラー時はメッセージ付きで throw する */
-export async function callApi<T>(path: string, body: unknown, passcode: string): Promise<T> {
+export async function callApi<T>(path: string, body: unknown): Promise<T> {
+  const passcode = getPasscode();
   const res = await fetch(path, {
     method: "POST",
     headers: { "content-type": "application/json", ...(passcode ? { "x-app-passcode": passcode } : {}) },

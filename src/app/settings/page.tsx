@@ -3,14 +3,16 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { useRef, useState } from "react";
 import { Button, Card, ErrorNote, Field, Input, PageHeader, Select, Textarea } from "@/components/ui";
-import { db, defaultSettings, exportAll, importAll, todayStr, type Settings } from "@/lib/db";
+import { clearLocal, db, defaultSettings, exportAll, importAll, saveSettings, todayStr, type Settings } from "@/lib/db";
+import { forgetPasscode, syncNow, useSyncState } from "@/lib/sync";
 import { NUTRIENT_KEYS, NUTRIENTS, calcTargets, type ActivityLevel, type Sex } from "@/lib/nutrients";
 
 export default function SettingsPage() {
   // undefined = 読み込み中、null = 未保存
   const stored = useLiveQuery(async () => (await db.settings.get("main")) ?? null, []);
   if (stored === undefined) return null;
-  return <SettingsForm initial={stored ?? defaultSettings()} />;
+  // 他の端末で設定が変わったら、フォームを作り直して反映する
+  return <SettingsForm key={stored?.updatedAt ?? 0} initial={stored ?? defaultSettings()} />;
 }
 
 function SettingsForm({ initial }: { initial: Settings }) {
@@ -19,8 +21,11 @@ function SettingsForm({ initial }: { initial: Settings }) {
   const [error, setError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  async function save(next = s) {
-    await db.settings.put(next);
+  const sync = useSyncState();
+  const cloud = sync.status !== "local" && sync.status !== "starting";
+
+  async function save() {
+    await saveSettings(s);
     setMessage("保存しました");
     setTimeout(() => setMessage(null), 2000);
   }
@@ -41,19 +46,27 @@ function SettingsForm({ initial }: { initial: Settings }) {
 
   async function doImport(file: File) {
     setError(null);
-    if (!confirm("現在のデータを上書きして復元します。よろしいですか？")) return;
+    if (!confirm("バックアップの内容を取り込みます（同じ記録は上書き、それ以外は追加）。よろしいですか？")) return;
     try {
       await importAll(JSON.parse(await file.text()));
-      location.reload();
+      setMessage("取り込みました");
     } catch (err) {
       setError((err as Error).message);
     }
   }
 
   async function wipe() {
-    if (!confirm("在庫・食事記録・設定をすべて削除します。元に戻せません。")) return;
-    await db.delete();
+    const text = cloud
+      ? "この端末に保存されたデータを消して、クラウドから取り直します。まだ同期されていない変更は失われます。よろしいですか？"
+      : "在庫・食事記録・設定をすべて削除します。元に戻せません。よろしいですか？";
+    if (!confirm(text)) return;
+    await clearLocal();
     location.reload();
+  }
+
+  async function logout() {
+    if (!confirm("この端末からパスコードを削除します。再度使うにはパスコードの入力が必要です。")) return;
+    await forgetPasscode();
   }
 
   return (
@@ -120,10 +133,35 @@ function SettingsForm({ initial }: { initial: Settings }) {
           </div>
         </Card>
 
-        <Card title="データのバックアップ・移行">
-          <p className="mb-3 text-sm text-muted">
-            データはこの端末のブラウザ内に保存されています。スマホとPCで同じデータを使うときは、書き出したファイルをもう一方で読み込んでください。
-          </p>
+        <Card title="データの同期">
+          {cloud ? (
+            <>
+              <p className="text-sm">
+                クラウド同期：<span className="font-semibold text-brand">有効</span>
+              </p>
+              <p className="mt-1 text-sm text-muted">
+                スマホ・PC など、同じパスコードを入れた端末どうしで在庫・食事記録・設定が自動で同期されます。
+                {sync.lastSyncedAt && <>最終同期 {new Date(sync.lastSyncedAt).toLocaleTimeString("ja-JP", { hour: "2-digit", minute: "2-digit" })}</>}
+              </p>
+              {sync.message && <p className="mt-2 text-sm text-danger">{sync.message}</p>}
+              <div className="mt-3 flex flex-wrap gap-2">
+                <Button variant="secondary" onClick={() => syncNow()} disabled={sync.status === "syncing"}>
+                  {sync.status === "syncing" ? "同期中…" : "今すぐ同期"}
+                </Button>
+                <Button variant="ghost" onClick={logout}>
+                  この端末からログアウト
+                </Button>
+              </div>
+            </>
+          ) : (
+            <p className="text-sm text-muted">
+              クラウドが未設定のため、データはこの端末の中だけに保存されています。スマホとPCで同じデータを使うには、README の手順でデータベースを設定してください。
+            </p>
+          )}
+        </Card>
+
+        <Card title="バックアップ">
+          <p className="mb-3 text-sm text-muted">データをファイルに書き出して保管したり、書き出したファイルを取り込んだりできます。</p>
           <div className="flex flex-wrap gap-2">
             <Button variant="secondary" onClick={doExport}>
               書き出す
@@ -149,11 +187,8 @@ function SettingsForm({ initial }: { initial: Settings }) {
         </Card>
 
         <Card title="その他">
-          <Field label="アクセス用パスコード（サーバーで APP_PASSCODE を設定した場合のみ）">
-            <Input type="password" autoComplete="off" value={s.passcode} onChange={(e) => setS({ ...s, passcode: e.target.value })} />
-          </Field>
-          <Button variant="danger" className="mt-4 px-0" onClick={wipe}>
-            すべてのデータを削除
+          <Button variant="danger" className="px-0" onClick={wipe}>
+            {cloud ? "この端末のデータを削除して取り直す" : "すべてのデータを削除"}
           </Button>
         </Card>
       </div>

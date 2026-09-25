@@ -62,7 +62,7 @@ export default function SuggestPage() {
       eatenToday: meals.map((m) => `${MEAL_LABELS[m.mealType]}: ${m.name}${m.amount ? `（${m.amount}）` : ""}`),
     };
     try {
-      const res = await callApi<SuggestResult>("/api/suggest", body, settings.passcode);
+      const res = await callApi<SuggestResult>("/api/suggest", body);
       setResult(res);
       try {
         localStorage.setItem(STORAGE_KEY, JSON.stringify({ date: todayStr(), result: res }));

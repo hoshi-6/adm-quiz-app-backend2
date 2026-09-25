@@ -3,6 +3,8 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
+import { startSync, useSyncState, type SyncStatus } from "@/lib/sync";
+import { PasscodeGate } from "./PasscodeGate";
 import { cx } from "./ui";
 
 const NAV = [
@@ -21,10 +23,32 @@ function Icon({ d }: { d: string }) {
   );
 }
 
+const SYNC_LABEL: Partial<Record<SyncStatus, { text: string; tone: string }>> = {
+  syncing: { text: "同期中", tone: "bg-muted" },
+  synced: { text: "同期済み", tone: "bg-brand" },
+  offline: { text: "オフライン", tone: "bg-warn" },
+  error: { text: "同期エラー", tone: "bg-danger" },
+};
+
+function SyncIndicator() {
+  const { status } = useSyncState();
+  const label = SYNC_LABEL[status];
+  if (!label) return null;
+  return (
+    <Link href="/settings" className="flex items-center gap-1.5 text-xs text-muted" title="データの同期">
+      <span className={cx("h-2 w-2 rounded-full", label.tone, status === "syncing" && "animate-pulse")} />
+      {label.text}
+    </Link>
+  );
+}
+
 export function AppShell({ children }: { children: ReactNode }) {
   const pathname = usePathname();
+  const sync = useSyncState();
 
   useEffect(() => {
+    startSync();
+
     if ("serviceWorker" in navigator && process.env.NODE_ENV === "production") {
       navigator.serviceWorker.register("/sw.js").catch(() => {});
     }
@@ -58,7 +82,12 @@ export function AppShell({ children }: { children: ReactNode }) {
       </aside>
 
       <main className="min-w-0 flex-1 px-4 pb-28 pt-5 md:px-8 md:pb-10 md:pt-8">
-        <div className="mx-auto max-w-4xl">{children}</div>
+        <div className="mx-auto max-w-4xl">
+          <div className="mb-2 flex h-4 justify-end">
+            <SyncIndicator />
+          </div>
+          {sync.status === "needs-passcode" ? <PasscodeGate /> : children}
+        </div>
       </main>
 
       {/* スマホ: 下部タブ */}

@@ -3,6 +3,8 @@
 家にある食材・調味料、今日食べたもの、不足している栄養素を管理し、
 それらをもとに AI（Claude）が夕食などの献立を提案する、スマートフォン・PC 兼用の Web アプリ（PWA）です。
 
+**スマホで使い始める手順は [docs/smartphone-setup.md](docs/smartphone-setup.md) を見てください。**
+
 ## 主な機能
 
 | 画面 | できること |
@@ -18,8 +20,11 @@
 ## 仕組み
 
 - **Next.js（App Router）+ TypeScript + Tailwind CSS**
-- **データは端末内（IndexedDB / Dexie）に保存**。サーバーに個人データは残りません。
-  スマホと PC でデータを移すときは「設定 → 書き出す / 読み込む」を使います。
+- **データはクラウド（PostgreSQL）で同期**。スマホと PC で同じ在庫・食事記録・設定を使えます。
+  各端末にも保存しているのでオフラインでも使え、つながったときに自動で同期します
+  （同じ記録を両方で編集した場合は、後から編集した方が残ります）。
+  データベースを設定しなければ、これまでどおり端末の中だけに保存します。
+- クラウドのデータは **パスコード（`APP_PASSCODE`）** で保護しています。初めて開いた端末で一度入力します。
 - **AI は Claude API** をサーバー側の API ルート（`/api/estimate`, `/api/suggest`）から呼び出します。
   API キーはブラウザに渡りません。構造化出力で JSON を受け取り、画面に表示しています。
 - **PWA 対応**: スマホでは「ホーム画面に追加」でアプリのように使えます。
@@ -31,10 +36,13 @@ src/
     meals/ pantry/ suggest/ settings/   各画面
     api/estimate/       食事内容 → 栄養素推定
     api/suggest/        献立提案
+    api/sync/           端末とクラウドの同期
     manifest.ts         PWA マニフェスト
   lib/
     nutrients.ts        栄養素の定義・目標値計算・不足判定
-    db.ts               IndexedDB（在庫・食事・設定）
+    db.ts               端末内の保存（IndexedDB）と書き込み関数
+    sync.ts             クラウドとの同期（端末側）
+    server/store.ts     クラウドの保存（PostgreSQL。テーブルは初回に自動作成）
     ai/claude.ts        Claude API 呼び出し
     ai/schemas.ts       AI 入出力のスキーマ
 ```
@@ -43,19 +51,20 @@ src/
 
 ```bash
 npm install
-cp .env.example .env.local   # ANTHROPIC_API_KEY を記入
+cp .env.example .env.local   # ANTHROPIC_API_KEY、APP_PASSCODE を記入（DATABASE_URL は任意）
 npm run dev                  # http://localhost:3000
 ```
 
-スマホから試すときは、同じ Wi-Fi で `http://<PCのIPアドレス>:3000` を開きます
-（「ホーム画面に追加」やオフライン表示は HTTPS の本番環境で有効になります）。
-
 ## 公開（デプロイ）
 
-Vercel などの Next.js 対応ホスティングにそのままデプロイできます。
-環境変数 `ANTHROPIC_API_KEY` を設定してください。
-URL を知っている人なら誰でも AI を呼べてしまうため、公開する場合は `APP_PASSCODE` も設定し、
-各端末の「設定」画面で同じパスコードを入力してください。
+Vercel + Neon（PostgreSQL）での公開手順は [docs/smartphone-setup.md](docs/smartphone-setup.md) にまとめています。
+
+| 環境変数 | 必須 | 内容 |
+| --- | --- | --- |
+| `ANTHROPIC_API_KEY` | ✓ | Claude API キー |
+| `APP_PASSCODE` | ✓ | アクセス用パスコード（クラウド同期を使うときは必須） |
+| `DATABASE_URL` | 同期するなら ✓ | PostgreSQL の接続文字列（Vercel で Neon を接続すると自動設定。`POSTGRES_URL` でも可） |
+| `CLAUDE_MODEL` | | 使うモデル（省略時 `claude-opus-5`） |
 
 ## 注意
 
@@ -64,7 +73,7 @@ URL を知っている人なら誰でも AI を呼べてしまうため、公開
 
 ## 今後の拡張案
 
-- アカウント機能とクラウド同期（Supabase など）で、端末間のデータを自動共有
+- 家族など複数人での利用（人ごとのアカウント）
 - レシートや冷蔵庫の写真から在庫を登録（Claude の画像入力）
 - 献立で使った食材を在庫から自動で減らす
 - 週ごとの栄養グラフ、買い物リスト

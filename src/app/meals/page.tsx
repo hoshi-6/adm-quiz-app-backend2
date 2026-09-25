@@ -4,8 +4,8 @@ import { useState, type FormEvent } from "react";
 import { NutrientBars } from "@/components/NutrientBars";
 import { Button, Card, ErrorNote, Field, Input, PageHeader, Select, Spinner, Textarea, cx } from "@/components/ui";
 import type { EstimateResult } from "@/lib/ai/schemas";
-import { MEAL_LABELS, addMeals, db, todayStr, type MealType } from "@/lib/db";
-import { callApi, useDayIntake, useSettings } from "@/lib/hooks";
+import { MEAL_LABELS, addMeals, deleteMeal, todayStr, type MealType } from "@/lib/db";
+import { callApi, useDayIntake } from "@/lib/hooks";
 import { NUTRIENT_KEYS, NUTRIENTS, emptyNutrients, fmt, type Nutrients } from "@/lib/nutrients";
 
 function guessMealType(): MealType {
@@ -19,7 +19,6 @@ function guessMealType(): MealType {
 type Draft = EstimateResult["items"][number] & { checked: boolean };
 
 export default function MealsPage() {
-  const settings = useSettings();
   const [date, setDate] = useState(todayStr());
   const [mealType, setMealType] = useState<MealType>(guessMealType);
   const [mode, setMode] = useState<"ai" | "manual">("ai");
@@ -41,7 +40,7 @@ export default function MealsPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await callApi<EstimateResult>("/api/estimate", { text }, settings.passcode);
+      const res = await callApi<EstimateResult>("/api/estimate", { text });
       setDrafts(res.items.map((i) => ({ ...i, checked: true })));
       setNote(res.note);
     } catch (err) {
@@ -202,7 +201,7 @@ export default function MealsPage() {
                             {m.amount && <span className="ml-2 text-muted">{m.amount}</span>}
                           </span>
                           <span className="tabular-nums text-muted">{Math.round(m.nutrients.energy)}kcal</span>
-                          <Button variant="danger" className="px-2 py-1" onClick={() => db.meals.delete(m.id!)}>
+                          <Button variant="danger" className="px-2 py-1" onClick={() => deleteMeal(m.id!)}>
                             削除
                           </Button>
                         </li>
