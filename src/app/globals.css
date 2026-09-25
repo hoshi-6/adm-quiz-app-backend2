@@ -11,6 +11,8 @@
   --brand-strong: #25703f;
   --warn: #c07a12;
   --danger: #c8412f;
+  /* グラフの棒の色（背景とのコントラストを確認済み） */
+  --chart-1: #2f8a4f;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -25,6 +27,7 @@
     --brand-strong: #63c883;
     --warn: #e0a042;
     --danger: #ea6d5b;
+    --chart-1: #44a865;
   }
 }
 
@@ -39,6 +42,7 @@
   --color-brand-strong: var(--brand-strong);
   --color-warn: var(--warn);
   --color-danger: var(--danger);
+  --color-chart-1: var(--chart-1);
   --font-sans: "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", system-ui, sans-serif;
 }
 

@@ -15,6 +15,13 @@ export const NutrientsSchema = z.object({
   salt: z.number().describe("食塩相当量 g"),
 });
 
+/** 端末で縮小した写真（base64）。Vercel のリクエスト上限（4.5MB）に収まる大きさまで */
+export const ImageSchema = z.object({
+  mediaType: z.enum(["image/jpeg", "image/png", "image/webp"]),
+  data: z.string().min(1).max(3_500_000),
+});
+export type ImageInput = z.infer<typeof ImageSchema>;
+
 // ---- 食事内容からの栄養推定 ----
 
 export const EstimateResultSchema = z.object({
@@ -29,28 +36,60 @@ export const EstimateResultSchema = z.object({
 });
 export type EstimateResult = z.infer<typeof EstimateResultSchema>;
 
-export const EstimateRequestSchema = z.object({
-  text: z.string().min(1).max(2000),
+export const EstimateRequestSchema = z
+  .object({
+    text: z.string().max(2000),
+    /** 料理の写真や、ほかのアプリの記録画面のスクリーンショット */
+    image: ImageSchema.optional(),
+  })
+  .refine((r) => r.text.trim() || r.image, "文章か写真のどちらかが必要です");
+
+// ---- 写真から在庫を登録 ----
+
+export const PantryScanResultSchema = z.object({
+  items: z.array(
+    z.object({
+      name: z.string().describe("食品名。パッケージに商品名が読めるときは『メーカー名 商品名』の実際の表記"),
+      category: z.enum(["ingredient", "seasoning"]).describe("ingredient=食材、seasoning=調味料・油・だし"),
+      quantity: z.number().describe("数量"),
+      unit: z.string().describe("単位（個・g・ml・本・パック・袋 など）"),
+      expiresOn: z.string().nullable().describe("写真から読み取れた賞味・消費期限（YYYY-MM-DD）。読めなければ null"),
+    }),
+  ),
+  note: z.string().describe("読み取りの注意点を一言で（読み取れなかったものがあれば書く）"),
+});
+export type PantryScanResult = z.infer<typeof PantryScanResultSchema>;
+
+export const PantryScanRequestSchema = z.object({
+  image: ImageSchema,
+  /** 期限の年を補うための今日の日付（YYYY-MM-DD） */
+  today: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
 });
 
 // ---- 献立提案 ----
 
-export const SuggestResultSchema = z.object({
-  summary: z.string().describe("今日の栄養状況と提案方針の要約（2〜3文）"),
-  suggestions: z.array(
-    z.object({
-      title: z.string().describe("料理名（主菜・副菜などの組み合わせでもよい）"),
-      reason: z.string().describe("どの不足栄養素を補えるか、なぜこの提案か"),
-      cookingMinutes: z.number().describe("調理時間の目安（分）"),
-      usesFromPantry: z.array(z.string()).describe("家にある食材・調味料のうち使うもの"),
-      needToBuy: z.array(z.string()).describe("買い足しが必要なもの（なければ空）"),
-      ingredients: z.array(z.string()).describe("材料と分量（例: 鶏むね肉 200g）"),
-      steps: z.array(z.string()).describe("作り方の手順"),
-      nutrientsPerServing: NutrientsSchema.describe("1人前あたりの推定栄養素"),
-    }),
-  ),
+export const SuggestionSchema = z.object({
+  title: z.string().describe("料理名（主菜・副菜などの組み合わせでもよい）"),
+  reason: z.string().describe("どの不足栄養素を補えるか、なぜこの提案か（1〜2文）"),
+  cookingMinutes: z.number().describe("調理時間の目安（分）"),
+  pantryUsage: z
+    .array(
+      z.object({
+        name: z.string().describe("在庫リストの食材名（そのまま書く）"),
+        amount: z.number().describe("指定人数分で使う量（在庫リストと同じ単位で）"),
+        unit: z.string().describe("在庫リストと同じ単位"),
+      }),
+    )
+    .describe("家にある『食材』のうち使うもの。調味料は含めない"),
+  needToBuy: z.array(z.string()).describe("買い足しが必要なもの（なければ空）"),
+  ingredients: z.array(z.string()).describe("指定人数分の材料と分量（調味料も含む。例: 鶏むね肉 200g）"),
+  steps: z.array(z.string()).describe("作り方の手順"),
+  nutrientsPerServing: NutrientsSchema.describe("1人前あたりの推定栄養素"),
 });
-export type SuggestResult = z.infer<typeof SuggestResultSchema>;
+export type Suggestion = z.infer<typeof SuggestionSchema>;
+
+/** 3案を並行して作るときの、料理の方向性 */
+export const SUGGEST_STYLES = ["和食", "洋食", "中華・エスニック"] as const;
 
 const NutrientStatus = z.object({
   label: z.string(),
@@ -60,6 +99,8 @@ const NutrientStatus = z.object({
 });
 
 export const SuggestRequestSchema = z.object({
+  /** SUGGEST_STYLES の番号 */
+  style: z.number().int().min(0).max(SUGGEST_STYLES.length - 1),
   mealType: z.string().max(20),
   servings: z.number().int().min(1).max(10),
   maxMinutes: z.number().int().min(5).max(240),

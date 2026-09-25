@@ -2,7 +2,7 @@
 
 import { useLiveQuery } from "dexie-react-hooks";
 import { useRef, useState } from "react";
-import { Button, Card, ErrorNote, Field, Input, PageHeader, Select, Textarea } from "@/components/ui";
+import { Button, Card, ErrorNote, Field, NumberInput, PageHeader, Select, Textarea } from "@/components/ui";
 import { clearLocal, db, defaultSettings, exportAll, importAll, saveSettings, todayStr, type Settings } from "@/lib/db";
 import { forgetPasscode, syncNow, useSyncState } from "@/lib/sync";
 import { NUTRIENT_KEYS, NUTRIENTS, calcTargets, type ActivityLevel, type Sex } from "@/lib/nutrients";
@@ -91,7 +91,7 @@ function SettingsForm({ initial }: { initial: Settings }) {
               </Select>
             </Field>
             <Field label="年齢">
-              <Input type="number" min={18} max={100} value={s.profile.age} onChange={(e) => updateProfile({ age: Number(e.target.value) || 18 })} />
+              <NumberInput integer min={18} max={120} value={s.profile.age} onValueChange={(age) => updateProfile({ age })} />
             </Field>
             <Field label="活動量">
               <Select value={s.profile.activity} onChange={(e) => updateProfile({ activity: e.target.value as ActivityLevel })}>
@@ -120,14 +120,7 @@ function SettingsForm({ initial }: { initial: Settings }) {
           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
             {NUTRIENT_KEYS.map((k) => (
               <Field key={k} label={`${NUTRIENTS[k].label}${NUTRIENTS[k].kind === "max" ? "（上限）" : ""} ${NUTRIENTS[k].unit}`}>
-                <Input
-                  type="number"
-                  inputMode="decimal"
-                  min="0"
-                  step="any"
-                  value={s.targets[k]}
-                  onChange={(e) => setS({ ...s, targets: { ...s.targets, [k]: Number(e.target.value) || 0 } })}
-                />
+                <NumberInput min={0} value={s.targets[k]} onValueChange={(v) => setS({ ...s, targets: { ...s.targets, [k]: v } })} />
               </Field>
             ))}
           </div>

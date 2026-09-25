@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
 
 export function cx(...classes: (string | false | null | undefined)[]) {
@@ -94,4 +95,58 @@ export function ErrorNote({ message }: { message: string | null }) {
 
 export function Spinner() {
   return <span className="inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent" />;
+}
+
+/**
+ * 数値入力。入力中は文字列のまま持つので、一度消してから打ち直せる。
+ * 範囲内の数値になったときだけ onValueChange を呼び、フォーカスが外れたら範囲に収める。
+ */
+export function NumberInput({
+  value,
+  onValueChange,
+  min,
+  max,
+  integer,
+  className,
+  ...props
+}: Omit<InputHTMLAttributes<HTMLInputElement>, "value" | "onChange" | "type" | "min" | "max"> & {
+  value: number;
+  onValueChange: (value: number) => void;
+  min?: number;
+  max?: number;
+  integer?: boolean;
+}) {
+  const [text, setText] = useState(String(value));
+  const [prev, setPrev] = useState(value);
+  // 外から値が変わったとき（再計算・同期など）は表示を合わせる
+  if (value !== prev) {
+    setPrev(value);
+    if (Number(text) !== value) setText(String(value));
+  }
+  const inRange = (n: number) => (min === undefined || n >= min) && (max === undefined || n <= max);
+
+  return (
+    <input
+      type="text"
+      inputMode={integer ? "numeric" : "decimal"}
+      className={cx(fieldClass, className)}
+      value={text}
+      onChange={(e) => {
+        const t = e.target.value.replace(/[０-９．]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0));
+        setText(t);
+        const n = Number(t);
+        if (t.trim() !== "" && Number.isFinite(n) && inRange(n) && (!integer || Number.isInteger(n))) onValueChange(n);
+      }}
+      onBlur={() => {
+        let n = Number(text);
+        if (text.trim() === "" || !Number.isFinite(n)) n = value;
+        if (integer) n = Math.round(n);
+        if (min !== undefined) n = Math.max(min, n);
+        if (max !== undefined) n = Math.min(max, n);
+        setText(String(n));
+        if (n !== value) onValueChange(n);
+      }}
+      {...props}
+    />
+  );
 }

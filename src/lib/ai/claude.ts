@@ -2,10 +2,15 @@
 import "server-only";
 import Anthropic from "@anthropic-ai/sdk";
 import { betaZodOutputFormat } from "@anthropic-ai/sdk/helpers/beta/zod";
+import type { BetaContentBlockParam } from "@anthropic-ai/sdk/resources/beta/messages/messages";
 import type { z } from "zod";
 import { HttpError } from "@/lib/server/http";
 
 export const MODEL = process.env.CLAUDE_MODEL || "claude-opus-5";
+
+// 高速モード（出力が最大2.5倍速くなる代わりに料金が2倍）。CLAUDE_FAST_MODE=1 で有効。対応モデルのみ
+const FAST_MODE_MODELS = ["claude-opus-5", "claude-opus-5-5", "claude-opus-4-8"];
+const FAST_MODE = process.env.CLAUDE_FAST_MODE === "1" && FAST_MODE_MODELS.includes(MODEL);
 
 let client: Anthropic | null = null;
 function getClient() {
@@ -16,16 +21,20 @@ function getClient() {
   return client;
 }
 
-/** system + user プロンプトを送り、スキーマどおりの JSON を受け取る */
+/** 画像（base64）を Claude に渡すためのブロック */
+export function imageBlock(image: { mediaType: "image/jpeg" | "image/png" | "image/webp"; data: string }): BetaContentBlockParam {
+  return { type: "image", source: { type: "base64", media_type: image.mediaType, data: image.data } };
+}
+
+/** system + user プロンプト（文字列、または画像を含むブロック）を送り、スキーマどおりの JSON を受け取る */
 export async function generateStructured<T extends z.ZodType>(opts: {
   system: string;
-  user: string;
+  user: string | BetaContentBlockParam[];
   schema: T;
   effort?: "low" | "medium" | "high";
 }): Promise<z.infer<T>> {
-  let response;
-  try {
-    response = await getClient().beta.messages.parse({
+  const request = (fast: boolean) =>
+    getClient().beta.messages.parse({
       model: MODEL,
       max_tokens: 16000,
       thinking: { type: "adaptive" },
@@ -34,11 +43,22 @@ export async function generateStructured<T extends z.ZodType>(opts: {
         format: betaZodOutputFormat(opts.schema),
       },
       // 安全分類器で断られた場合、サーバー側で推奨モデルに自動で切り替える
-      betas: ["server-side-fallback-2026-07-01"],
+      betas: fast ? ["server-side-fallback-2026-07-01", "fast-mode-2026-02-01"] : ["server-side-fallback-2026-07-01"],
       fallbacks: "default",
+      ...(fast ? { speed: "fast" as const } : {}),
       system: opts.system,
       messages: [{ role: "user", content: opts.user }],
     });
+
+  let response;
+  try {
+    try {
+      response = await request(FAST_MODE);
+    } catch (err) {
+      // 高速モードは専用の利用枠があり、混雑時は通常モードでやり直す
+      if (FAST_MODE && err instanceof Anthropic.RateLimitError) response = await request(false);
+      else throw err;
+    }
   } catch (err) {
     if (err instanceof Anthropic.AuthenticationError) {
       throw new HttpError("ANTHROPIC_API_KEY が正しく設定されていません", 500);

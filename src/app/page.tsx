@@ -60,7 +60,7 @@ export default function HomePage() {
       </div>
 
       <div className="mt-4 grid gap-4 md:grid-cols-3">
-        <Card title="摂取量 / 目標" className="md:col-span-2">
+        <Card title="摂取量 / 目標" className="md:col-span-2" action={<Link href="/trends" className="text-sm text-brand">推移を見る</Link>}>
           <NutrientBars intake={intake} targets={targets} />
         </Card>
 

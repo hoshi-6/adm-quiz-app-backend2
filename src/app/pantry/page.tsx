@@ -2,12 +2,16 @@
 
 import { useLiveQuery } from "dexie-react-hooks";
 import { useState, type FormEvent } from "react";
-import { Badge, Button, Card, Field, Input, PageHeader, Select, cx } from "@/components/ui";
-import { addPantryItems, daysUntil, db, deletePantryItem, updatePantryItem, type PantryCategory, type PantryItem } from "@/lib/db";
+import type { Product } from "@/app/api/products/route";
+import { FoodNameInput } from "@/components/pantry/FoodNameInput";
+import { PhotoImport } from "@/components/pantry/PhotoImport";
+import { ProductSearch } from "@/components/pantry/ProductSearch";
+import { Badge, Button, Card, Field, Input, NumberInput, PageHeader, Select, cx } from "@/components/ui";
+import { addToPantry, daysUntil, db, deletePantryItem, updatePantryItem, type PantryCategory, type PantryItem } from "@/lib/db";
 
-const UNITS = ["個", "g", "kg", "ml", "L", "本", "枚", "パック", "袋", "玉", "束", "少々"];
+const UNITS = ["個", "g", "kg", "ml", "L", "本", "枚", "パック", "袋", "玉", "束", "株", "切れ", "尾", "丁", "缶", "瓶", "箱", "少々"];
 
-const SEASONING_PRESET = ["塩", "こしょう", "砂糖", "醤油", "味噌", "みりん", "料理酒", "酢", "サラダ油", "ごま油", "マヨネーズ", "ケチャップ", "コンソメ", "和風だし"];
+const SEASONING_PRESET = ["塩", "こしょう", "砂糖", "醤油", "味噌", "みりん", "料理酒", "酢", "サラダ油", "ごま油", "マヨネーズ", "ケチャップ", "コンソメ", "和風だし（顆粒）"];
 
 function ExpiryBadge({ date }: { date?: string }) {
   if (!date) return null;
@@ -21,7 +25,8 @@ export default function PantryPage() {
   const items = useLiveQuery(() => db.pantry.orderBy("name").toArray(), []);
   const [tab, setTab] = useState<PantryCategory>("ingredient");
   const [query, setQuery] = useState("");
-  const [form, setForm] = useState({ name: "", quantity: "1", unit: "個", expiresOn: "" });
+  const [form, setForm] = useState({ name: "", quantity: 1, unit: "個", expiresOn: "" });
+  const [searching, setSearching] = useState(false);
 
   const list = (items ?? [])
     .filter((i) => i.category === tab && i.name.includes(query.trim()))
@@ -32,24 +37,19 @@ export default function PantryPage() {
     const name = form.name.trim();
     if (!name) return;
     // 入力欄は先にリセットし、続けて入力しても消えないようにする
-    setForm({ ...form, name: "", quantity: "1", expiresOn: "" });
-    const existing = await db.pantry.where("name").equals(name).and((i) => i.category === tab).first();
-    const quantity = Number(form.quantity) || 0;
-    if (existing && existing.unit === form.unit) {
-      await updatePantryItem(existing.id!, {
-        quantity: existing.quantity + quantity,
-        expiresOn: form.expiresOn || existing.expiresOn,
-      });
-    } else {
-      await addPantryItems([{ name, category: tab, quantity, unit: form.unit, expiresOn: form.expiresOn || undefined }]);
-    }
+    setForm({ ...form, name: "", quantity: 1, expiresOn: "" });
+    setSearching(false);
+    await addToPantry([{ name, category: tab, quantity: form.quantity, unit: form.unit, expiresOn: form.expiresOn || undefined }]);
+  }
+
+  function pickProduct(p: Product) {
+    setForm({ ...form, name: [p.brand, p.name, p.quantity].filter(Boolean).join(" "), quantity: 1, unit: "個" });
+    setSearching(false);
   }
 
   async function addPresetSeasonings() {
     const have = new Set((items ?? []).filter((i) => i.category === "seasoning").map((i) => i.name));
-    await addPantryItems(
-      SEASONING_PRESET.filter((n) => !have.has(n)).map((name) => ({ name, category: "seasoning" as const, quantity: 1, unit: "本" })),
-    );
+    await addToPantry(SEASONING_PRESET.filter((n) => !have.has(n)).map((name) => ({ name, category: "seasoning" as const, quantity: 1, unit: "本" })));
   }
 
   async function changeQty(item: PantryItem, delta: number) {
@@ -60,6 +60,7 @@ export default function PantryPage() {
   }
 
   const step = (unit: string) => (["g", "ml"].includes(unit) ? 50 : 1);
+  const units = UNITS.includes(form.unit) ? UNITS : [form.unit, ...UNITS];
 
   return (
     <>
@@ -81,19 +82,20 @@ export default function PantryPage() {
       <Card className="mb-4">
         <form onSubmit={add} className="grid grid-cols-2 gap-3 md:grid-cols-[2fr_1fr_1fr_1.3fr_auto] md:items-end">
           <Field label="名前" className="col-span-2 md:col-span-1">
-            <Input
+            <FoodNameInput
               value={form.name}
-              onChange={(e) => setForm({ ...form, name: e.target.value })}
-              placeholder={tab === "ingredient" ? "例: 鶏むね肉" : "例: 醤油"}
-              required
+              category={tab}
+              onChange={(name) => setForm({ ...form, name })}
+              onPick={(f) => setForm({ ...form, name: f.name, unit: f.unit })}
+              placeholder={tab === "ingredient" ? "例: 鶏むね肉（「とり」でも候補が出ます）" : "例: 醤油"}
             />
           </Field>
           <Field label="数量">
-            <Input type="number" inputMode="decimal" min="0" step="any" value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} />
+            <NumberInput min={0} value={form.quantity} onValueChange={(quantity) => setForm({ ...form, quantity })} />
           </Field>
           <Field label="単位">
             <Select value={form.unit} onChange={(e) => setForm({ ...form, unit: e.target.value })}>
-              {UNITS.map((u) => (
+              {units.map((u) => (
                 <option key={u}>{u}</option>
               ))}
             </Select>
@@ -105,11 +107,24 @@ export default function PantryPage() {
             追加
           </Button>
         </form>
-        {tab === "seasoning" && (
-          <button onClick={addPresetSeasonings} className="mt-3 text-sm text-brand underline">
-            基本の調味料をまとめて追加
-          </button>
-        )}
+
+        <div className="mt-3 flex flex-wrap gap-x-4 gap-y-2">
+          {!searching && (
+            <button type="button" onClick={() => setSearching(true)} className="text-sm text-brand underline">
+              市販の商品を検索して登録
+            </button>
+          )}
+          {tab === "seasoning" && (
+            <button type="button" onClick={addPresetSeasonings} className="text-sm text-brand underline">
+              基本の調味料をまとめて追加
+            </button>
+          )}
+        </div>
+        {searching && <ProductSearch initialQuery={form.name} onPick={pickProduct} onClose={() => setSearching(false)} />}
+
+        <div className="mt-4 border-t border-line pt-4">
+          <PhotoImport />
+        </div>
       </Card>
 
       <Input className="mb-3" placeholder="絞り込み" value={query} onChange={(e) => setQuery(e.target.value)} />

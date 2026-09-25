@@ -1,15 +1,17 @@
 import { generateStructured } from "@/lib/ai/claude";
 import { checkPasscode, errorResponse } from "@/lib/server/http";
-import { SuggestRequestSchema, SuggestResultSchema, type SuggestRequest } from "@/lib/ai/schemas";
+import { SUGGEST_STYLES, SuggestRequestSchema, SuggestionSchema, type SuggestRequest } from "@/lib/ai/schemas";
 
-const SYSTEM = `あなたは家庭料理に詳しい管理栄養士です。家にある食材・調味料と、今日の栄養摂取状況をもとに、次の食事の献立を3案提案します。
+// 3案を並行して作るため、1回の呼び出しでは1案だけを作る（料理の方向性は案ごとに変える）
+const SYSTEM = `あなたは家庭料理に詳しい管理栄養士です。家にある食材・調味料と、今日の栄養摂取状況をもとに、次の食事の献立を1案提案します。
 
 方針:
 - 今日不足している栄養素を優先して補い、上限を超えている栄養素（食塩など）は控えめにしてください。
-- できるだけ家にある食材・調味料で作れるものにし、買い足しは最小限にしてください。usesFromPantry には在庫リストにある名前をそのまま書いてください。
+- できるだけ家にある食材・調味料で作れるものにし、買い足しは最小限にしてください。
+- pantryUsage には、在庫リストの「食材」のうち使うものを、在庫リストと同じ名前・同じ単位で、指定人数分の使用量を書いてください（在庫量を超えないこと）。調味料は含めません。
 - 賞味期限が近い食材を優先するよう指示された場合は、それを積極的に使ってください。
 - ユーザーの好み・アレルギー・苦手なものは必ず守ってください。
-- 3案は調理法や主食材が偏らないよう、変化をつけてください。
+- 指定された料理の方向性に沿ってください。ただしユーザーのリクエストと合わない場合は、リクエストを優先します。
 - 栄養素の数値は日本食品標準成分表（八訂）を目安に、1人前あたりで推定してください。`;
 
 function buildPrompt(r: SuggestRequest): string {
@@ -47,7 +49,10 @@ ${r.eatenToday.length ? r.eatenToday.map((e) => `- ${e}`).join("\n") : "（ま�
 ${status}
 
 ## 家にある食材・調味料
-${pantry}`;
+${pantry}
+
+## 今回の料理の方向性
+${SUGGEST_STYLES[r.style]}`;
 }
 
 // AI の応答には数十秒かかることがあるため、実行時間の上限を延ばす（Vercel 無料プランの上限内）
@@ -63,7 +68,7 @@ export async function POST(req: Request) {
     const result = await generateStructured({
       system: SYSTEM,
       user: buildPrompt(parsed.data),
-      schema: SuggestResultSchema,
+      schema: SuggestionSchema,
       effort: "medium",
     });
     return Response.json(result);

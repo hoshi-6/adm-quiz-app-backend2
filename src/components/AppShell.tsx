@@ -11,6 +11,7 @@ const NAV = [
   { href: "/", label: "ホーム", icon: "M3 11.5 12 4l9 7.5M5 10v10h5v-6h4v6h5V10" },
   { href: "/meals", label: "食事記録", icon: "M4 3v8a3 3 0 0 0 3 3v7M7 3v5M10 3v8a3 3 0 0 1-3 3M17 21V3c-2 0-4 2-4 6v5h4" },
   { href: "/suggest", label: "AI献立", icon: "M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8zM19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9z" },
+  { href: "/trends", label: "推移", icon: "M4 20V4M4 20h16M8 16v-4M12 16V8M16 16v-6" },
   { href: "/pantry", label: "在庫", icon: "M4 7h16v13H4zM4 7l2-4h12l2 4M9 11h6" },
   { href: "/settings", label: "設定", icon: "M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-2.9 1.2V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-2.9-1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.7 1.7 0 0 0 3 14H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.2-2.9l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.7 1.7 0 0 0 10 3V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 2.9 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1A1.7 1.7 0 0 0 21 10h.1a2 2 0 1 1 0 4H21a1.7 1.7 0 0 0-1.6 1z" },
 ];
@@ -91,7 +92,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </main>
 
       {/* スマホ: 下部タブ */}
-      <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-5 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-6 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
         {NAV.map((n) => (
           <Link
             key={n.href}

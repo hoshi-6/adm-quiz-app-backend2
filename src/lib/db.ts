@@ -147,6 +147,30 @@ export async function addPantryItems(items: NewRecord<PantryItem>[]) {
   changed();
 }
 
+/** 在庫に追加する。同じ名前・種類・単位のものがあれば数量を足す */
+export async function addToPantry(items: NewRecord<PantryItem>[]) {
+  const fresh: NewRecord<PantryItem>[] = [];
+  for (const item of items) {
+    const existing = await db.pantry
+      .where("name")
+      .equals(item.name)
+      .and((i) => i.category === item.category && i.unit === item.unit)
+      .first();
+    if (existing?.id) {
+      await db.pantry.update(existing.id, {
+        quantity: Math.round((existing.quantity + item.quantity) * 100) / 100,
+        expiresOn: item.expiresOn || existing.expiresOn,
+        updatedAt: Date.now(),
+        dirty: 1,
+      });
+    } else {
+      fresh.push(item);
+    }
+  }
+  if (fresh.length) await addPantryItems(fresh);
+  else changed();
+}
+
 export async function updatePantryItem(id: number, changes: Partial<NewRecord<PantryItem>>) {
   await db.pantry.update(id, { ...changes, updatedAt: Date.now(), dirty: 1 });
   changed();
@@ -154,6 +178,18 @@ export async function updatePantryItem(id: number, changes: Partial<NewRecord<Pa
 
 export async function deletePantryItem(id: number) {
   await deleteRecord("pantry", id);
+}
+
+/** 使った分を在庫から減らす。なくなったものは在庫から消す */
+export async function consumePantry(usages: { id: number; amount: number }[]) {
+  for (const u of usages) {
+    const item = await db.pantry.get(u.id);
+    if (!item || u.amount <= 0) continue;
+    const left = Math.round((item.quantity - u.amount) * 100) / 100;
+    if (left <= 0) await deleteRecord("pantry", u.id);
+    else await db.pantry.update(u.id, { quantity: left, updatedAt: Date.now(), dirty: 1 });
+  }
+  changed();
 }
 
 async function deleteRecord(collection: "pantry" | "meals", id: number) {

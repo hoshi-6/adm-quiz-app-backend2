@@ -3,9 +3,11 @@
 import { useState, type FormEvent } from "react";
 import { NutrientBars } from "@/components/NutrientBars";
 import { Button, Card, ErrorNote, Field, Input, PageHeader, Select, Spinner, Textarea, cx } from "@/components/ui";
-import type { EstimateResult } from "@/lib/ai/schemas";
+import { PhotoButton } from "@/components/PhotoButton";
+import type { EstimateResult, ImageInput } from "@/lib/ai/schemas";
 import { MEAL_LABELS, addMeals, deleteMeal, todayStr, type MealType } from "@/lib/db";
 import { callApi, useDayIntake } from "@/lib/hooks";
+import { imageFileToInput } from "@/lib/image";
 import { NUTRIENT_KEYS, NUTRIENTS, emptyNutrients, fmt, type Nutrients } from "@/lib/nutrients";
 
 function guessMealType(): MealType {
@@ -30,17 +32,18 @@ export default function MealsPage() {
   const [error, setError] = useState<string | null>(null);
   const [drafts, setDrafts] = useState<Draft[]>([]);
   const [note, setNote] = useState("");
+  const [photo, setPhoto] = useState<ImageInput | null>(null);
 
   // 手入力
   const [manual, setManual] = useState({ name: "", amount: "", nutrients: emptyNutrients() });
 
   async function estimate(e: FormEvent) {
     e.preventDefault();
-    if (!text.trim()) return;
+    if (!text.trim() && !photo) return;
     setLoading(true);
     setError(null);
     try {
-      const res = await callApi<EstimateResult>("/api/estimate", { text });
+      const res = await callApi<EstimateResult>("/api/estimate", { text, image: photo ?? undefined });
       setDrafts(res.items.map((i) => ({ ...i, checked: true })));
       setNote(res.note);
     } catch (err) {
@@ -58,6 +61,7 @@ export default function MealsPage() {
     await saveEntries(drafts.filter((d) => d.checked));
     setDrafts([]);
     setText("");
+    setPhoto(null);
     setNote("");
   }
 
@@ -108,10 +112,35 @@ export default function MealsPage() {
                   rows={3}
                   value={text}
                   onChange={(e) => setText(e.target.value)}
-                  placeholder="例: ご飯 茶碗1杯、豚の生姜焼き、キャベツの千切り、味噌汁（豆腐とわかめ）"
+                  placeholder={photo ? "補足があれば（例: ご飯は半分残した）" : "例: ご飯 茶碗1杯、豚の生姜焼き、キャベツの千切り、味噌汁（豆腐とわかめ）"}
                 />
+                {photo ? (
+                  <div className="flex items-center gap-3">
+                    {/* eslint-disable-next-line @next/next/no-img-element -- 端末内の写真のプレビュー */}
+                    <img src={`data:${photo.mediaType};base64,${photo.data}`} alt="食事の写真" className="h-16 w-16 rounded-lg object-cover" />
+                    <button type="button" className="text-sm text-muted underline" onClick={() => setPhoto(null)}>
+                      写真を外す
+                    </button>
+                  </div>
+                ) : (
+                  <div className="flex flex-wrap items-center gap-2">
+                    <PhotoButton
+                      onFile={async (f) => {
+                        setError(null);
+                        try {
+                          setPhoto(await imageFileToInput(f));
+                        } catch (err) {
+                          setError((err as Error).message);
+                        }
+                      }}
+                    >
+                      写真で記録
+                    </PhotoButton>
+                    <span className="text-xs text-muted">料理の写真や、ほかのアプリの記録画面のスクリーンショットも使えます</span>
+                  </div>
+                )}
                 <ErrorNote message={error} />
-                <Button type="submit" disabled={loading || !text.trim()} className="w-full md:w-auto">
+                <Button type="submit" disabled={loading || (!text.trim() && !photo)} className="w-full md:w-auto">
                   {loading ? <Spinner /> : null}
                   {loading ? "推定中…" : "栄養素を推定する"}
                 </Button>
