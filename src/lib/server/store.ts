@@ -4,9 +4,15 @@ import "server-only";
 import postgres from "postgres";
 import { PULL_LIMIT, type SyncChange } from "@/lib/sync-schema";
 
-/** Vercel の Neon 連携は DATABASE_URL（または POSTGRES_URL）を自動で設定する */
+/** Vercel の Neon 連携が自動で設定する接続文字列のうち、見つかったものを使う */
 export function databaseUrl() {
-  return process.env.DATABASE_URL || process.env.POSTGRES_URL || "";
+  return (
+    process.env.DATABASE_URL ||
+    process.env.POSTGRES_URL ||
+    process.env.DATABASE_URL_UNPOOLED ||
+    process.env.POSTGRES_URL_NON_POOLING ||
+    ""
+  );
 }
 
 let sql: postgres.Sql | null = null;
