@@ -12,6 +12,9 @@ export const MODEL = process.env.CLAUDE_MODEL || "claude-opus-5";
 const FAST_MODE_MODELS = ["claude-opus-5", "claude-opus-5-5", "claude-opus-4-8"];
 const FAST_MODE = process.env.CLAUDE_FAST_MODE === "1" && FAST_MODE_MODELS.includes(MODEL);
 
+// 商品や食事の栄養を Web で調べるときのモデル。CLAUDE_LOOKUP_MODEL を設定すると、調べものだけ別のモデル（速いモデルなど）にできる
+export const LOOKUP_MODEL = process.env.CLAUDE_LOOKUP_MODEL || MODEL;
+
 let client: Anthropic | null = null;
 function getClient() {
   if (!process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_AUTH_TOKEN) {
@@ -126,22 +129,32 @@ export async function generateWithWebSearch<T extends z.ZodType>(opts: {
     },
   ];
   const messages: BetaMessageParam[] = [{ role: "user", content: opts.user }];
+  const fast = process.env.CLAUDE_FAST_MODE === "1" && FAST_MODE_MODELS.includes(LOOKUP_MODEL);
+  const request = (useFast: boolean) =>
+    getClient().beta.messages.create({
+      model: LOOKUP_MODEL,
+      max_tokens: 16000,
+      thinking: { type: "adaptive" },
+      output_config: { effort: opts.effort ?? "low" },
+      betas: useFast ? ["server-side-fallback-2026-07-01", "fast-mode-2026-02-01"] : ["server-side-fallback-2026-07-01"],
+      fallbacks: "default",
+      ...(useFast ? { speed: "fast" as const } : {}),
+      system: opts.system,
+      tools,
+      messages,
+    });
 
   // 検索が長引くと pause_turn で一度止まるので、続きを依頼する（最大4回）
   for (let turn = 0; turn < 4; turn++) {
     let response;
     try {
-      response = await getClient().beta.messages.create({
-        model: MODEL,
-        max_tokens: 16000,
-        thinking: { type: "adaptive" },
-        output_config: { effort: opts.effort ?? "low" },
-        betas: ["server-side-fallback-2026-07-01"],
-        fallbacks: "default",
-        system: opts.system,
-        tools,
-        messages,
-      });
+      try {
+        response = await request(fast);
+      } catch (err) {
+        // 高速モードが混雑しているときは通常モードでやり直す
+        if (fast && err instanceof Anthropic.RateLimitError) response = await request(false);
+        else throw err;
+      }
     } catch (err) {
       toHttpError(err);
     }

@@ -8,6 +8,7 @@ import { fmt } from "@/lib/nutrients";
 import { perLabel } from "@/lib/portion";
 import { Input, cx } from "../ui";
 import { ConsumePanel } from "./ConsumePanel";
+import { ProductImage } from "./ProductImage";
 
 /** 食事記録の「在庫から」：在庫の商品を選び、登録済みの栄養成分で記録して在庫を減らす */
 export function StockPicker({ date, mealType }: { date: string; mealType: MealType }) {
@@ -37,7 +38,8 @@ export function StockPicker({ date, mealType }: { date: string; mealType: MealTy
               onClick={() => setSelected(selected === item.id ? null : item.id!)}
               aria-expanded={selected === item.id}
             >
-              <span className="min-w-0">
+              {item.imageUrl && <ProductImage imageUrl={item.imageUrl} size="sm" link={false} />}
+              <span className="min-w-0 flex-1">
                 <span className="block truncate text-sm font-medium">{item.name}</span>
                 <span className="block text-xs text-muted">
                   残り {item.quantity}

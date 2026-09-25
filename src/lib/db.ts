@@ -37,6 +37,8 @@ export interface PantryItem extends Syncable {
   unitSize?: { amount: number; unit: "g" | "ml" } | null;
   /** 栄養成分。食事記録で「在庫から使う」ときにこの値で計算する */
   nutrition?: ItemNutrition | null;
+  /** 商品の画像（出典ページの代表画像）。同じ商品か見て確かめるため */
+  imageUrl?: string | null;
 }
 
 export type MealType = "breakfast" | "lunch" | "dinner" | "snack";
@@ -187,6 +189,7 @@ export async function addToPantry(items: NewRecord<PantryItem>[]) {
         // 新しく調べた内容量・栄養成分があれば更新し、なければ今までのものを残す
         unitSize: item.unitSize ?? existing.unitSize ?? null,
         nutrition: item.nutrition ?? existing.nutrition ?? null,
+        imageUrl: item.imageUrl ?? existing.imageUrl ?? null,
         updatedAt: Date.now(),
         dirty: 1,
       });

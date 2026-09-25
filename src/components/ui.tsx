@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import type { ButtonHTMLAttributes, InputHTMLAttributes, ReactNode, SelectHTMLAttributes, TextareaHTMLAttributes } from "react";
 
 export function cx(...classes: (string | false | null | undefined)[]) {
@@ -56,13 +56,15 @@ export function Button({ variant = "primary", className, ...props }: ButtonHTMLA
 
 const fieldClass =
   "w-full rounded-xl border border-line bg-surface px-3 py-2 text-base outline-none focus:border-brand focus:ring-2 focus:ring-brand/20 md:text-sm";
+/** 1行の入力欄（テキスト・数値・選択・日付）は同じ高さにそろえる */
+const lineField = cx(fieldClass, "h-10");
 
 export function Input({ className, ...props }: InputHTMLAttributes<HTMLInputElement>) {
-  return <input className={cx(fieldClass, className)} {...props} />;
+  return <input className={cx(lineField, className)} {...props} />;
 }
 
 export function Select({ className, ...props }: SelectHTMLAttributes<HTMLSelectElement>) {
-  return <select className={cx(fieldClass, className)} {...props} />;
+  return <select className={cx(lineField, "py-0", className)} {...props} />;
 }
 
 export function Textarea({ className, ...props }: TextareaHTMLAttributes<HTMLTextAreaElement>) {
@@ -129,7 +131,7 @@ export function NumberInput({
     <input
       type="text"
       inputMode={integer ? "numeric" : "decimal"}
-      className={cx(fieldClass, className)}
+      className={cx(lineField, className)}
       value={text}
       onChange={(e) => {
         const t = e.target.value.replace(/[０-９．]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0));
@@ -177,7 +179,7 @@ export function OptionalNumberInput({
     <input
       type="text"
       inputMode={integer ? "numeric" : "decimal"}
-      className={cx(fieldClass, className)}
+      className={cx(lineField, className)}
       value={text}
       onChange={(e) => {
         const t = e.target.value.replace(/[０-９．]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0));
@@ -188,5 +190,82 @@ export function OptionalNumberInput({
       }}
       {...props}
     />
+  );
+}
+
+/**
+ * 日付の入力欄。iPhone の Safari は日付入力の見た目が崩れやすいため、
+ * 表示は普通の入力欄と同じ見た目で自前で描き、タップしたときだけ端末の日付選択を開く。
+ */
+export function DateField({
+  value,
+  onChange,
+  placeholder = "日付を選ぶ",
+  max,
+  clearable,
+  className,
+  "aria-label": ariaLabel,
+}: {
+  value: string;
+  onChange: (value: string) => void;
+  placeholder?: string;
+  max?: string;
+  clearable?: boolean;
+  className?: string;
+  "aria-label"?: string;
+}) {
+  // 今年の日付は年を省いて短く見せる（狭い欄でも切れないように）
+  const d = value ? new Date(`${value}T00:00:00`) : null;
+  const label = d
+    ? d.toLocaleDateString("ja-JP", {
+        ...(d.getFullYear() === new Date().getFullYear() ? {} : { year: "numeric" }),
+        month: "numeric",
+        day: "numeric",
+        weekday: "short",
+      })
+    : placeholder;
+  return (
+    <div className={cx("relative min-w-0", className)}>
+      <div className={cx(lineField, "flex items-center justify-between gap-2 py-0 pr-2", !value && "text-muted")} aria-hidden>
+        <span className="truncate">{label}</span>
+        <svg viewBox="0 0 24 24" className="h-4 w-4 shrink-0 text-muted" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round">
+          <rect x="4" y="5" width="16" height="15" rx="2" />
+          <path d="M8 3v4M16 3v4M4 10h16" />
+        </svg>
+      </div>
+      {/* 実際の入力は透明にして上に重ね、タップで端末の日付選択を開く */}
+      <input
+        type="date"
+        value={value}
+        max={max}
+        aria-label={ariaLabel ?? placeholder}
+        onChange={(e) => onChange(e.target.value)}
+        className="absolute inset-0 h-full w-full cursor-pointer text-base opacity-0"
+      />
+      {clearable && value && (
+        <button
+          type="button"
+          onClick={() => onChange("")}
+          className="absolute right-8 top-1/2 z-10 -translate-y-1/2 rounded px-1.5 text-xs text-muted hover:text-fg"
+          aria-label="日付を消す"
+        >
+          ✕
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** 時間のかかる処理中に、今なにをしているかを段階的に表示する */
+export function ProgressText({ steps, interval = 6000 }: { steps: string[]; interval?: number }) {
+  const [i, setI] = useState(0);
+  useEffect(() => {
+    const t = setInterval(() => setI((n) => Math.min(n + 1, steps.length - 1)), interval);
+    return () => clearInterval(t);
+  }, [steps.length, interval]);
+  return (
+    <span className="flex items-center gap-2 text-sm text-muted" role="status">
+      <Spinner /> {steps[i]}
+    </span>
   );
 }

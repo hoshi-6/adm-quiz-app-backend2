@@ -3,7 +3,7 @@
 import { useState, type FormEvent } from "react";
 import { toast } from "@/lib/toast";
 import { NutrientBars, NutrientTable } from "@/components/NutrientBars";
-import { Badge, Button, Card, ErrorNote, Field, Input, OptionalNumberInput, PageHeader, Select, Spinner, Textarea, cx } from "@/components/ui";
+import { Badge, Button, Card, DateField, ErrorNote, Field, Input, OptionalNumberInput, PageHeader, Select, Spinner, Textarea, cx } from "@/components/ui";
 import { PhotoButton } from "@/components/PhotoButton";
 import { StockPicker } from "@/components/pantry/StockPicker";
 import type { EstimateResult, ImageInput } from "@/lib/ai/schemas";
@@ -80,7 +80,7 @@ export default function MealsPage() {
           <Card>
             <div className="mb-3 grid grid-cols-2 gap-3">
               <Field label="日付">
-                <Input type="date" value={date} max={todayStr()} onChange={(e) => setDate(e.target.value || todayStr())} />
+                <DateField value={date} max={todayStr()} onChange={(v) => setDate(v || todayStr())} aria-label="日付" />
               </Field>
               <Field label="食事">
                 <Select value={mealType} onChange={(e) => setMealType(e.target.value as MealType)}>

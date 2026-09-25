@@ -58,14 +58,3 @@ body {
     transform: translateY(8px);
   }
 }
-
-/* iPhone の Safari では日付入力が枠からはみ出すため、幅を枠に合わせる */
-input[type="date"] {
-  min-width: 0;
-  max-width: 100%;
-  width: 100%;
-  display: block;
-}
-input[type="date"]::-webkit-date-and-time-value {
-  text-align: left;
-}

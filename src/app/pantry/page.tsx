@@ -7,11 +7,12 @@ import type { Product } from "@/app/api/products/route";
 import { FoodNameInput } from "@/components/pantry/FoodNameInput";
 import { PhotoImport } from "@/components/pantry/PhotoImport";
 import { ConsumePanel } from "@/components/pantry/ConsumePanel";
+import { ProductImage } from "@/components/pantry/ProductImage";
 import { ProductSearch } from "@/components/pantry/ProductSearch";
 import { fmt } from "@/lib/nutrients";
 import { lookupItemNutrition } from "@/lib/pantry-ai";
 import { perLabel } from "@/lib/portion";
-import { Badge, Button, Card, Field, Input, NumberInput, PageHeader, Select, cx } from "@/components/ui";
+import { Badge, Button, Card, DateField, Field, Input, NumberInput, PageHeader, Select, cx } from "@/components/ui";
 import { addToPantry, daysUntil, db, deletePantryItem, updatePantryItem, type PantryCategory, type PantryItem } from "@/lib/db";
 
 const UNITS = ["個", "g", "kg", "ml", "L", "本", "枚", "パック", "袋", "玉", "束", "株", "切れ", "尾", "丁", "缶", "瓶", "箱", "少々"];
@@ -133,7 +134,7 @@ export default function PantryPage() {
             </Select>
           </Field>
           <Field label="賞味・消費期限（任意）" className="col-span-2 md:col-span-1">
-            <Input type="date" value={form.expiresOn} onChange={(e) => setForm({ ...form, expiresOn: e.target.value })} />
+            <DateField value={form.expiresOn} placeholder="期限を選ぶ（任意）" clearable onChange={(expiresOn) => setForm({ ...form, expiresOn })} aria-label="賞味・消費期限" />
           </Field>
           <Button type="submit" className="col-span-2 md:col-span-1">
             追加
@@ -166,6 +167,14 @@ export default function PantryPage() {
           {list.map((item) => (
             <li key={item.id} className="px-4 py-3">
               <div className="flex items-start gap-3">
+                {(item.imageUrl || item.nutrition?.source) && (
+                  <ProductImage
+                    imageUrl={item.imageUrl}
+                    source={item.nutrition?.source}
+                    size="sm"
+                    onResolved={(imageUrl) => imageUrl && updatePantryItem(item.id!, { imageUrl })}
+                  />
+                )}
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="font-medium">{item.name}</span>

@@ -75,6 +75,7 @@ Vercel + Neon（PostgreSQL）での公開手順は [docs/smartphone-setup.md](do
 | `APP_PASSCODE` | ✓ | アクセス用パスコード（クラウド同期を使うときは必須） |
 | `DATABASE_URL` | 同期するなら ✓ | PostgreSQL の接続文字列（Vercel で Neon を接続すると自動設定。`POSTGRES_URL` でも可） |
 | `CLAUDE_MODEL` | | 使うモデル（省略時 `claude-opus-5`） |
+| `CLAUDE_LOOKUP_MODEL` | | 商品・食事の栄養を Web で調べるときだけ使うモデル（例: `claude-sonnet-5`。速く・安くなるが精度は下がることがある） |
 | `CLAUDE_FAST_MODE` | | `1` にすると AI の出力が最大 2.5 倍速くなる高速モード（料金は約 2 倍。Opus 系のみ） |
 
 ## 注意

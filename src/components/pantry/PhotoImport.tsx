@@ -9,9 +9,10 @@ import { completeNutrients, fmt } from "@/lib/nutrients";
 import { perLabel } from "@/lib/portion";
 import { toast } from "@/lib/toast";
 import { PhotoButton } from "../PhotoButton";
-import { Badge, Button, ErrorNote, Input, NumberInput, OptionalNumberInput, Select, Spinner } from "../ui";
+import { ProductImage } from "./ProductImage";
+import { Badge, Button, DateField, ErrorNote, Input, NumberInput, OptionalNumberInput, ProgressText, Select } from "../ui";
 
-type Row = PantryScanResult["items"][number] & { checked: boolean };
+type Row = PantryScanResult["items"][number] & { checked: boolean; imageUrl?: string | null };
 
 export function toItemNutrition(n: PantryScanResult["items"][number]["nutrition"] | null | undefined): ItemNutrition | null {
   if (!n || !(n.perAmount > 0)) return null;
@@ -104,6 +105,7 @@ export function PhotoImport() {
         expiresOn: r.expiresOn || undefined,
         unitSize: r.unitSize && r.unitSize.amount > 0 ? r.unitSize : null,
         nutrition: toItemNutrition(r.nutrition),
+        imageUrl: r.imageUrl ?? null,
       })),
     );
     setRows(null);
@@ -128,9 +130,7 @@ export function PhotoImport() {
           写真から
         </PhotoButton>
         {loading ? (
-          <span className="flex items-center gap-2 text-sm text-muted">
-            <Spinner /> 商品と栄養成分を調べています…
-          </span>
+          <ProgressText steps={["商品を探しています…", "公式の栄養成分表示を確認しています…", "内容量と栄養成分をまとめています…", "もうすぐ終わります…"]} />
         ) : (
           !rows && <span className="text-xs text-muted">パッケージ・冷蔵庫の中・レシートを撮ると、商品名・内容量・栄養成分をまとめて調べます</span>
         )}
@@ -161,7 +161,10 @@ export function PhotoImport() {
                   onChange={(e) => update(i, { checked: e.target.checked })}
                   aria-label={`${r.name}を追加する`}
                 />
-                <Input value={r.name} onChange={(e) => update(i, { name: e.target.value })} aria-label="商品名" />
+                <div className="flex items-start gap-2">
+                  <ProductImage source={r.nutrition?.source} size="sm" onResolved={(imageUrl) => update(i, { imageUrl })} />
+                  <Input value={r.name} onChange={(e) => update(i, { name: e.target.value })} aria-label="商品名" />
+                </div>
                 <div className="col-start-2 grid grid-cols-[4.5rem_4.5rem_1fr] gap-1.5">
                   <NumberInput min={0} value={r.quantity} onValueChange={(quantity) => update(i, { quantity })} aria-label="数量" />
                   <Input value={r.unit} onChange={(e) => update(i, { unit: e.target.value })} aria-label="単位" />
@@ -191,11 +194,12 @@ export function PhotoImport() {
                     </Select>
                   </div>
                 )}
-                <Input
-                  type="date"
+                <DateField
                   className="col-start-2"
                   value={r.expiresOn ?? ""}
-                  onChange={(e) => update(i, { expiresOn: e.target.value || null })}
+                  placeholder="賞味・消費期限（任意）"
+                  clearable
+                  onChange={(v) => update(i, { expiresOn: v || null })}
                   aria-label="期限"
                 />
                 <NutritionSummary n={toItemNutrition(r.nutrition)} />
