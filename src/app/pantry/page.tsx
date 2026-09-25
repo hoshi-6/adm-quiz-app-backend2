@@ -6,7 +6,11 @@ import { useState, type FormEvent } from "react";
 import type { Product } from "@/app/api/products/route";
 import { FoodNameInput } from "@/components/pantry/FoodNameInput";
 import { PhotoImport } from "@/components/pantry/PhotoImport";
+import { ConsumePanel } from "@/components/pantry/ConsumePanel";
 import { ProductSearch } from "@/components/pantry/ProductSearch";
+import { fmt } from "@/lib/nutrients";
+import { lookupItemNutrition } from "@/lib/pantry-ai";
+import { perLabel } from "@/lib/portion";
 import { Badge, Button, Card, Field, Input, NumberInput, PageHeader, Select, cx } from "@/components/ui";
 import { addToPantry, daysUntil, db, deletePantryItem, updatePantryItem, type PantryCategory, type PantryItem } from "@/lib/db";
 
@@ -28,6 +32,22 @@ export default function PantryPage() {
   const [query, setQuery] = useState("");
   const [form, setForm] = useState({ name: "", quantity: 1, unit: "個", expiresOn: "" });
   const [searching, setSearching] = useState(false);
+  const [manualOpen, setManualOpen] = useState(false);
+  // 「使う」パネルを開いている商品
+  const [using, setUsing] = useState<number | null>(null);
+  const [lookingUp, setLookingUp] = useState<number | null>(null);
+
+  async function lookup(item: PantryItem) {
+    setLookingUp(item.id!);
+    try {
+      await lookupItemNutrition(item);
+      toast(`${item.name}の栄養成分を登録しました`);
+    } catch (err) {
+      toast((err as Error).message, "error");
+    } finally {
+      setLookingUp(null);
+    }
+  }
 
   const list = (items ?? [])
     .filter((i) => i.category === tab && i.name.includes(query.trim()))
@@ -87,6 +107,11 @@ export default function PantryPage() {
       </div>
 
       <Card className="mb-4">
+        <PhotoImport />
+
+        <details className="mt-4 border-t border-line pt-3" open={manualOpen} onToggle={(e) => setManualOpen((e.target as HTMLDetailsElement).open)}>
+          <summary className="cursor-pointer text-sm font-medium text-brand">手で追加する</summary>
+          <div className="mt-3">
         <form onSubmit={add} className="grid grid-cols-2 gap-3 md:grid-cols-[2fr_1fr_1fr_1.3fr_auto] md:items-end">
           <Field label="名前" className="col-span-2 md:col-span-1">
             <FoodNameInput
@@ -128,10 +153,8 @@ export default function PantryPage() {
           )}
         </div>
         {searching && <ProductSearch initialQuery={form.name} onPick={pickProduct} onClose={() => setSearching(false)} />}
-
-        <div className="mt-4 border-t border-line pt-4">
-          <PhotoImport />
-        </div>
+          </div>
+        </details>
       </Card>
 
       <Input className="mb-3" placeholder="絞り込み" value={query} onChange={(e) => setQuery(e.target.value)} />
@@ -141,28 +164,59 @@ export default function PantryPage() {
       ) : (
         <ul className="divide-y divide-line overflow-hidden rounded-2xl border border-line bg-surface">
           {list.map((item) => (
-            <li key={item.id} className="flex items-center gap-3 px-4 py-3">
-              <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <span className="font-medium">{item.name}</span>
-                  <ExpiryBadge date={item.expiresOn} />
+            <li key={item.id} className="px-4 py-3">
+              <div className="flex items-start gap-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-medium">{item.name}</span>
+                    <ExpiryBadge date={item.expiresOn} />
+                  </div>
+                  <p className="text-sm tabular-nums text-muted">
+                    {item.quantity}
+                    {item.unit}
+                    {item.unitSize && `（1${item.unit} ${item.unitSize.amount}${item.unitSize.unit}）`}
+                  </p>
+                  {item.nutrition ? (
+                    <p className="text-xs text-muted">
+                      栄養成分: {perLabel(item.nutrition)} {fmt(item.nutrition.nutrients.energy, "energy")}kcal
+                      {item.nutrition.basis !== "estimate" && <span className="ml-1 text-brand">（{item.nutrition.basis === "web" ? "公式" : "パッケージ"}の表示）</span>}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted">栄養成分: 未登録</p>
+                  )}
                 </div>
-                <span className="text-sm tabular-nums text-muted">
-                  {item.quantity}
-                  {item.unit}
-                </span>
+                <div className="flex shrink-0 items-center gap-1">
+                  <Button variant="secondary" className="h-9 w-9 px-0" aria-label={`${item.name}を減らす`} onClick={() => changeQty(item, -step(item.unit))}>
+                    −
+                  </Button>
+                  <Button variant="secondary" className="h-9 w-9 px-0" aria-label={`${item.name}を増やす`} onClick={() => changeQty(item, step(item.unit))}>
+                    ＋
+                  </Button>
+                  <Button className="h-9 px-3" onClick={() => setUsing(using === item.id ? null : item.id!)} aria-expanded={using === item.id}>
+                    使う
+                  </Button>
+                </div>
               </div>
-              <div className="flex items-center gap-1">
-                <Button variant="secondary" className="h-9 w-9 px-0" aria-label="減らす" onClick={() => changeQty(item, -step(item.unit))}>
-                  −
-                </Button>
-                <Button variant="secondary" className="h-9 w-9 px-0" aria-label="増やす" onClick={() => changeQty(item, step(item.unit))}>
-                  ＋
-                </Button>
-                <Button variant="danger" className="h-9 px-2" onClick={() => deletePantryItem(item.id!)}>
-                  削除
-                </Button>
-              </div>
+              {using === item.id && (
+                <div className="mt-3">
+                  <ConsumePanel item={item} recordDefault={item.category === "ingredient" && !!item.nutrition} onDone={() => setUsing(null)} />
+                  <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+                    <button type="button" className="text-brand underline disabled:opacity-50" disabled={lookingUp === item.id} onClick={() => lookup(item)}>
+                      {lookingUp === item.id ? "調べています…" : item.nutrition ? "内容量・栄養成分を調べ直す" : "内容量・栄養成分をAIで調べる"}
+                    </button>
+                    <button
+                      type="button"
+                      className="text-danger underline"
+                      onClick={async () => {
+                        await deletePantryItem(item.id!);
+                        toast(`${item.name}を在庫から削除しました`);
+                      }}
+                    >
+                      在庫から削除
+                    </button>
+                  </div>
+                </div>
+              )}
             </li>
           ))}
         </ul>

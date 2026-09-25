@@ -5,26 +5,19 @@ import { toast } from "@/lib/toast";
 import { NutrientBars, NutrientTable } from "@/components/NutrientBars";
 import { Badge, Button, Card, ErrorNote, Field, Input, OptionalNumberInput, PageHeader, Select, Spinner, Textarea, cx } from "@/components/ui";
 import { PhotoButton } from "@/components/PhotoButton";
+import { StockPicker } from "@/components/pantry/StockPicker";
 import type { EstimateResult, ImageInput } from "@/lib/ai/schemas";
-import { MEAL_LABELS, addMeals, deleteMeal, todayStr, type MealType } from "@/lib/db";
+import { MEAL_LABELS, addMeals, deleteMeal, guessMealType, todayStr, type MealType } from "@/lib/db";
 import { callApi, useDayIntake } from "@/lib/hooks";
 import { imageFileToInput } from "@/lib/image";
 import { GROUP_LABELS, NUTRIENT_GROUPS, NUTRIENTS, completeNutrients, emptyNutrients, type Nutrients } from "@/lib/nutrients";
-
-function guessMealType(): MealType {
-  const h = new Date().getHours();
-  if (h < 10) return "breakfast";
-  if (h < 15) return "lunch";
-  if (h < 17) return "snack";
-  return "dinner";
-}
 
 type Draft = EstimateResult["items"][number] & { checked: boolean };
 
 export default function MealsPage() {
   const [date, setDate] = useState(todayStr());
   const [mealType, setMealType] = useState<MealType>(guessMealType);
-  const [mode, setMode] = useState<"ai" | "manual">("ai");
+  const [mode, setMode] = useState<"ai" | "stock" | "manual">("ai");
   const { meals, intake, targets } = useDayIntake(date);
 
   // AI 推定
@@ -101,14 +94,16 @@ export default function MealsPage() {
             </div>
 
             <div className="mb-3 inline-flex rounded-xl bg-subtle p-1 text-sm">
-              {(["ai", "manual"] as const).map((m) => (
+              {(["ai", "stock", "manual"] as const).map((m) => (
                 <button key={m} onClick={() => setMode(m)} className={cx("rounded-lg px-3 py-1", mode === m ? "bg-surface shadow-sm" : "text-muted")}>
-                  {m === "ai" ? "AIで推定" : "手入力"}
+                  {m === "ai" ? "AIで調べる" : m === "stock" ? "在庫から" : "手入力"}
                 </button>
               ))}
             </div>
 
-            {mode === "ai" ? (
+            {mode === "stock" ? (
+              <StockPicker date={date} mealType={mealType} />
+            ) : mode === "ai" ? (
               <form onSubmit={estimate} className="space-y-3">
                 <Textarea
                   rows={3}

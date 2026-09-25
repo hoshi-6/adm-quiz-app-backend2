@@ -46,22 +46,40 @@ export const EstimateRequestSchema = z
 export const PantryScanResultSchema = z.object({
   items: z.array(
     z.object({
-      name: z.string().describe("食品名。パッケージに商品名が読めるときは『メーカー名 商品名』の実際の表記"),
-      category: z.enum(["ingredient", "seasoning"]).describe("ingredient=食材、seasoning=調味料・油・だし"),
-      quantity: z.number().describe("数量"),
-      unit: z.string().describe("単位（個・g・ml・本・パック・袋 など）"),
-      expiresOn: z.string().nullable().describe("写真から読み取れた賞味・消費期限（YYYY-MM-DD）。読めなければ null"),
+      name: z.string().describe("商品名。市販品は『メーカー名 商品名』を実際の表記どおりに（内容量は含めない）。生鮮品は一般名"),
+      category: z.enum(["ingredient", "seasoning"]).describe("ingredient=食材・食品、seasoning=調味料・油・だし"),
+      quantity: z.number().describe("在庫の数量（unit で数えた数）"),
+      unit: z.string().describe("在庫の数え方。袋・個・本・パック・缶・枚・玉 など。量り売りや生肉は g"),
+      unitSize: z
+        .object({ amount: z.number().describe("内容量の数値"), unit: z.enum(["g", "ml"]) })
+        .nullable()
+        .describe("unit 1つあたりの内容量（例: 1袋 21g → {amount:21, unit:'g'}）。unit が g・ml なら null"),
+      expiresOn: z.string().nullable().describe("写真から読み取れた賞味・消費期限（YYYY-MM-DD）。なければ null"),
+      nutrition: z
+        .object({
+          perAmount: z.number().describe("栄養成分表示の基準量（例: 100、1）"),
+          perUnit: z.string().describe("基準量の単位（g・ml・袋・個・本 など。例: 100g あたりなら 'g'、1袋あたりなら '袋'）"),
+          nutrients: NutrientsSchema.describe("基準量あたりの栄養素。表示にない項目は原材料から推定して埋める"),
+          basis: z.enum(["label", "web", "estimate"]).describe("label=写真の表示、web=公式サイト等で確認、estimate=食品成分表からの推定"),
+          source: z.string().nullable().describe("basis が web のときは参照した URL。それ以外は null"),
+        })
+        .describe("栄養成分"),
     }),
   ),
-  note: z.string().describe("読み取りの注意点を一言で（読み取れなかったものがあれば書く）"),
+  note: z.string().describe("読み取り・調査の注意点を一言で（見つからなかった商品など）"),
 });
 export type PantryScanResult = z.infer<typeof PantryScanResultSchema>;
 
-export const PantryScanRequestSchema = z.object({
-  image: ImageSchema,
-  /** 期限の年を補うための今日の日付（YYYY-MM-DD） */
-  today: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
-});
+export const PantryScanRequestSchema = z
+  .object({
+    /** 冷蔵庫・パッケージ・レシートの写真 */
+    image: ImageSchema.optional(),
+    /** 「カルビー ポテトチップス うすしお 60g 2袋」のような文章 */
+    text: z.string().max(1000).optional(),
+    /** 期限の年を補うための今日の日付（YYYY-MM-DD） */
+    today: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  })
+  .refine((r) => r.image || r.text?.trim(), "写真か文章のどちらかが必要です");
 
 // ---- 献立提案 ----
 

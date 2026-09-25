@@ -14,6 +14,17 @@ interface Syncable {
 
 export type PantryCategory = "ingredient" | "seasoning";
 
+/** 在庫の商品が持つ栄養成分（パッケージや公式サイトの表示どおり、per あたりの量で持つ） */
+export interface ItemNutrition {
+  /** 何あたりの値か（例: 100 g、1 袋） */
+  per: { amount: number; unit: string };
+  nutrients: Nutrients;
+  /** label=パッケージの表示、web=公式サイトなど、estimate=食品成分表からの推定 */
+  basis: "label" | "web" | "estimate";
+  /** 参照したページの URL */
+  source: string | null;
+}
+
 export interface PantryItem extends Syncable {
   id?: number;
   name: string;
@@ -22,6 +33,10 @@ export interface PantryItem extends Syncable {
   unit: string;
   /** YYYY-MM-DD */
   expiresOn?: string;
+  /** 在庫の単位1つあたりの内容量（例: 1袋 = 21 g）。単位が g・ml のときは不要 */
+  unitSize?: { amount: number; unit: "g" | "ml" } | null;
+  /** 栄養成分。食事記録で「在庫から使う」ときにこの値で計算する */
+  nutrition?: ItemNutrition | null;
 }
 
 export type MealType = "breakfast" | "lunch" | "dinner" | "snack";
@@ -32,6 +47,15 @@ export const MEAL_LABELS: Record<MealType, string> = {
   dinner: "夕食",
   snack: "間食",
 };
+
+/** 今の時刻から、どの食事かを推測する */
+export function guessMealType(): MealType {
+  const h = new Date().getHours();
+  if (h < 10) return "breakfast";
+  if (h < 15) return "lunch";
+  if (h < 17) return "snack";
+  return "dinner";
+}
 
 export interface MealEntry extends Syncable {
   id?: number;
@@ -160,6 +184,9 @@ export async function addToPantry(items: NewRecord<PantryItem>[]) {
       await db.pantry.update(existing.id, {
         quantity: Math.round((existing.quantity + item.quantity) * 100) / 100,
         expiresOn: item.expiresOn || existing.expiresOn,
+        // 新しく調べた内容量・栄養成分があれば更新し、なければ今までのものを残す
+        unitSize: item.unitSize ?? existing.unitSize ?? null,
+        nutrition: item.nutrition ?? existing.nutrition ?? null,
         updatedAt: Date.now(),
         dirty: 1,
       });
