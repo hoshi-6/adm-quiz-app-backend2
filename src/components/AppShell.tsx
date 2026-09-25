@@ -83,7 +83,7 @@ export function AppShell({ children }: { children: ReactNode }) {
         </nav>
       </aside>
 
-      <main className="min-w-0 flex-1 px-4 pb-28 pt-5 md:px-8 md:pb-10 md:pt-8">
+      <main className="min-w-0 flex-1 overflow-x-clip px-4 pb-28 pt-5 md:px-8 md:pb-10 md:pt-8">
         <div className="mx-auto max-w-4xl">
           <div className="mb-2 flex h-4 justify-end">
             <SyncIndicator />

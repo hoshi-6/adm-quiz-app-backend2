@@ -74,17 +74,19 @@ export function ConsumePanel({
 
   return (
     <div className="space-y-3 rounded-xl border border-line bg-bg/60 p-3">
-      <div className="flex flex-wrap items-center gap-2">
-        <span className="text-sm">使った量</span>
-        <div className="w-24">
-          <NumberInput min={0} value={amount} onValueChange={setAmount} aria-label="使った量" />
-        </div>
-        <div className="w-24">
-          <Select value={unit} onChange={(e) => setUnit(e.target.value)} aria-label="使った量の単位">
-            {units.map((u) => (
-              <option key={u}>{u}</option>
-            ))}
-          </Select>
+      <div>
+        <p className="mb-1 text-xs font-medium text-muted">使った量</p>
+        <div className="flex items-center gap-2">
+          <div className="min-w-0 flex-1">
+            <NumberInput min={0} value={amount} onValueChange={setAmount} aria-label="使った量" />
+          </div>
+          <div className="w-24 shrink-0">
+            <Select value={unit} onChange={(e) => setUnit(e.target.value)} aria-label="使った量の単位">
+              {units.map((u) => (
+                <option key={u}>{u}</option>
+              ))}
+            </Select>
+          </div>
         </div>
       </div>
       <div className="flex flex-wrap gap-1.5">

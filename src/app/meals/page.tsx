@@ -75,8 +75,8 @@ export default function MealsPage() {
     <>
       <PageHeader title="食事記録" description="食べたものを文章や写真で入力すると、AIが栄養素を調べます。市販品は公式の栄養成分表示を探します" />
 
-      <div className="grid gap-4 md:grid-cols-[1fr_320px]">
-        <div className="flex flex-col gap-4">
+      <div className="grid gap-4 md:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="flex min-w-0 flex-col gap-4">
           <Card>
             <div className="mb-3 grid grid-cols-2 gap-3">
               <Field label="日付">
