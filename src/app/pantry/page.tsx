@@ -7,6 +7,7 @@ import type { Product } from "@/app/api/products/route";
 import { FoodNameInput } from "@/components/pantry/FoodNameInput";
 import { PhotoImport } from "@/components/pantry/PhotoImport";
 import { ConsumePanel } from "@/components/pantry/ConsumePanel";
+import { PantryEditForm } from "@/components/pantry/PantryEditForm";
 import { ProductImage } from "@/components/pantry/ProductImage";
 import { ProductSearch } from "@/components/pantry/ProductSearch";
 import { fmt } from "@/lib/nutrients";
@@ -34,8 +35,8 @@ export default function PantryPage() {
   const [form, setForm] = useState({ name: "", quantity: 1, unit: "個", expiresOn: "" });
   const [searching, setSearching] = useState(false);
   const [manualOpen, setManualOpen] = useState(false);
-  // 「使う」パネルを開いている商品
-  const [using, setUsing] = useState<number | null>(null);
+  // 「使う」「編集」パネルを開いている商品
+  const [panel, setPanel] = useState<{ id: number; tab: "use" | "edit" } | null>(null);
   const [lookingUp, setLookingUp] = useState<number | null>(null);
 
   async function lookup(item: PantryItem) {
@@ -195,35 +196,46 @@ export default function PantryPage() {
                   )}
                 </div>
                 <div className="flex shrink-0 items-center gap-1">
-                  <Button variant="secondary" className="h-9 w-9 px-0" aria-label={`${item.name}を減らす`} onClick={() => changeQty(item, -step(item.unit))}>
-                    −
-                  </Button>
-                  <Button variant="secondary" className="h-9 w-9 px-0" aria-label={`${item.name}を増やす`} onClick={() => changeQty(item, step(item.unit))}>
-                    ＋
-                  </Button>
-                  <Button className="h-9 px-3" onClick={() => setUsing(using === item.id ? null : item.id!)} aria-expanded={using === item.id}>
+                  <Button
+                    className="h-9 px-3"
+                    onClick={() => setPanel(panel?.id === item.id && panel?.tab === "use" ? null : { id: item.id!, tab: "use" })}
+                    aria-expanded={panel?.id === item.id && panel?.tab === "use"}
+                  >
                     使う
+                  </Button>
+                  <Button
+                    variant="secondary"
+                    className="h-9 px-3"
+                    onClick={() => setPanel(panel?.id === item.id && panel?.tab === "edit" ? null : { id: item.id!, tab: "edit" })}
+                    aria-expanded={panel?.id === item.id && panel?.tab === "edit"}
+                  >
+                    編集
                   </Button>
                 </div>
               </div>
-              {using === item.id && (
+              {panel?.id === item.id && (
                 <div className="mt-3">
-                  <ConsumePanel item={item} recordDefault={item.category === "ingredient" && !!item.nutrition} onDone={() => setUsing(null)} />
-                  <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-sm">
-                    <button type="button" className="text-brand underline disabled:opacity-50" disabled={lookingUp === item.id} onClick={() => lookup(item)}>
-                      {lookingUp === item.id ? "調べています…" : item.nutrition ? "内容量・栄養成分を調べ直す" : "内容量・栄養成分をAIで調べる"}
-                    </button>
-                    <button
-                      type="button"
-                      className="text-danger underline"
-                      onClick={async () => {
-                        await deletePantryItem(item.id!);
-                        toast(`${item.name}を在庫から削除しました`);
-                      }}
-                    >
-                      在庫から削除
-                    </button>
-                  </div>
+                  {panel?.tab === "use" ? (
+                    <>
+                      <ConsumePanel item={item} recordDefault={item.category === "ingredient" && !!item.nutrition} onDone={() => setPanel(null)} />
+                      <div className="mt-2 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                        <span className="text-muted">数を直す</span>
+                        <Button variant="secondary" className="h-8 w-8 px-0" aria-label={`${item.name}を減らす`} onClick={() => changeQty(item, -step(item.unit))}>
+                          −
+                        </Button>
+                        <Button variant="secondary" className="h-8 w-8 px-0" aria-label={`${item.name}を増やす`} onClick={() => changeQty(item, step(item.unit))}>
+                          ＋
+                        </Button>
+                        {!item.nutrition && (
+                          <button type="button" className="text-brand underline disabled:opacity-50" disabled={lookingUp === item.id} onClick={() => lookup(item)}>
+                            {lookingUp === item.id ? "調べています…" : "内容量・栄養成分をAIで調べる"}
+                          </button>
+                        )}
+                      </div>
+                    </>
+                  ) : (
+                    <PantryEditForm item={item} onDone={() => setPanel(null)} />
+                  )}
                 </div>
               )}
             </li>

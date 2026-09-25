@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, type FormEvent } from "react";
+import { useState } from "react";
 import type { ImageInput, PantryScanResult } from "@/lib/ai/schemas";
 import { addToPantry, todayStr, type ItemNutrition } from "@/lib/db";
 import { callApi } from "@/lib/hooks";
@@ -10,9 +10,17 @@ import { perLabel } from "@/lib/portion";
 import { toast } from "@/lib/toast";
 import { PhotoButton } from "../PhotoButton";
 import { ProductImage } from "./ProductImage";
+import { ProductSearchBox } from "./ProductSearchBox";
 import { Badge, Button, DateField, ErrorNote, Input, NumberInput, OptionalNumberInput, ProgressText, Select } from "../ui";
 
-type Row = PantryScanResult["items"][number] & { checked: boolean; imageUrl?: string | null };
+type Row = PantryScanResult["items"][number] & {
+  checked: boolean;
+  imageUrl?: string | null;
+  /** 「違う商品」で探し直すときの入力欄を開いているか */
+  fixing?: boolean;
+  fixText?: string;
+  refinding?: boolean;
+};
 
 export function toItemNutrition(n: PantryScanResult["items"][number]["nutrition"] | null | undefined): ItemNutrition | null {
   if (!n || !(n.perAmount > 0)) return null;
@@ -52,7 +60,6 @@ function NutritionSummary({ n }: { n: ItemNutrition | null }) {
  * 内容量と栄養成分も一緒に持たせるので、あとで「1袋使った」「10g使った」を記録できる。
  */
 export function PhotoImport() {
-  const [text, setText] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [rows, setRows] = useState<Row[] | null>(null);
@@ -78,17 +85,36 @@ export function PhotoImport() {
     try {
       const image = await imageFileToInput(file);
       setPreview(`data:${image.mediaType};base64,${image.data}`);
-      await analyze({ image, text: text.trim() || undefined });
+      await analyze({ image });
     } catch (err) {
       setError((err as Error).message);
     }
   }
 
-  function fromText(e: FormEvent) {
-    e.preventDefault();
-    if (!text.trim()) return;
+  function fromText(text: string) {
     setPreview(null);
     void analyze({ text });
+  }
+
+  /** 見つかった商品が違っていたとき、その行だけ探し直す */
+  async function refind(i: number) {
+    const row = rows?.[i];
+    if (!row?.fixText?.trim()) return;
+    update(i, { refinding: true });
+    try {
+      const res = await callApi<PantryScanResult>("/api/pantry-scan", {
+        text: `${row.fixText.trim()} ${row.quantity}${row.unit}`,
+        exclude: row.name,
+        today: todayStr(),
+      });
+      const found = res.items[0];
+      if (!found) throw new Error("見つかりませんでした。名前を変えて試してください");
+      setRows((rs) => rs && rs.map((x, j) => (j === i ? { ...found, checked: true, imageUrl: null } : x)));
+      toast("探し直しました");
+    } catch (err) {
+      update(i, { refinding: false });
+      toast((err as Error).message, "error");
+    }
   }
 
   const update = (i: number, patch: Partial<Row>) => setRows((rs) => rs && rs.map((r, j) => (j === i ? { ...r, ...patch } : r)));
@@ -110,7 +136,6 @@ export function PhotoImport() {
     );
     setRows(null);
     setPreview(null);
-    setText("");
     toast(`${picked.length}件を在庫に追加しました`);
   }
 
@@ -119,12 +144,7 @@ export function PhotoImport() {
   return (
     <div>
       <p className="mb-2 text-sm font-medium">AIで調べて登録</p>
-      <form onSubmit={fromText} className="flex gap-2">
-        <Input value={text} onChange={(e) => setText(e.target.value)} placeholder="例: カルビー ポテトチップス うすしお 2袋" aria-label="登録したい商品" />
-        <Button type="submit" disabled={loading || !text.trim()} className="shrink-0">
-          調べる
-        </Button>
-      </form>
+      <ProductSearchBox onSearch={fromText} disabled={loading} />
       <div className="mt-2 flex flex-wrap items-center gap-2">
         <PhotoButton onFile={fromPhoto} disabled={loading}>
           写真から
@@ -162,7 +182,7 @@ export function PhotoImport() {
                   aria-label={`${r.name}を追加する`}
                 />
                 <div className="flex items-start gap-2">
-                  <ProductImage source={r.nutrition?.source} size="sm" onResolved={(imageUrl) => update(i, { imageUrl })} />
+                  <ProductImage key={r.nutrition?.source ?? "none"} source={r.nutrition?.source} size="sm" onResolved={(imageUrl) => update(i, { imageUrl })} />
                   <Input value={r.name} onChange={(e) => update(i, { name: e.target.value })} aria-label="商品名" />
                 </div>
                 <div className="col-start-2 grid grid-cols-[4.5rem_4.5rem_1fr] gap-1.5">
@@ -203,6 +223,41 @@ export function PhotoImport() {
                   aria-label="期限"
                 />
                 <NutritionSummary n={toItemNutrition(r.nutrition)} />
+                {r.fixing ? (
+                  <form
+                    className="col-start-2 space-y-2 rounded-lg bg-subtle p-2"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      void refind(i);
+                    }}
+                  >
+                    <p className="text-xs text-muted">正しい商品名やメーカー、内容量などを入れて探し直します（今の候補は除いて探します）</p>
+                    <Input
+                      value={r.fixText ?? ""}
+                      onChange={(e) => update(i, { fixText: e.target.value })}
+                      placeholder="例: ブルボン ルマンド 12本入"
+                      aria-label="探し直す商品名"
+                      autoFocus
+                    />
+                    <div className="flex gap-2">
+                      <Button type="submit" disabled={r.refinding || !r.fixText?.trim()} className="flex-1">
+                        {r.refinding ? "探しています…" : "探し直す"}
+                      </Button>
+                      <Button type="button" variant="ghost" onClick={() => update(i, { fixing: false })}>
+                        やめる
+                      </Button>
+                    </div>
+                  </form>
+                ) : (
+                  <div className="col-start-2 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+                    <button type="button" className="text-brand underline" onClick={() => update(i, { fixing: true, fixText: r.name })}>
+                      違う商品？探し直す
+                    </button>
+                    <button type="button" className="text-muted underline" onClick={() => setRows((rs) => rs && rs.filter((_, j) => j !== i))}>
+                      この行を消す
+                    </button>
+                  </div>
+                )}
               </li>
             ))}
           </ul>

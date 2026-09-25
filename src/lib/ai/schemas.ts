@@ -78,6 +78,8 @@ export const PantryScanRequestSchema = z
     text: z.string().max(1000).optional(),
     /** 期限の年を補うための今日の日付（YYYY-MM-DD） */
     today: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+    /** 探し直すとき、違っていた商品の名前（これ以外を探す） */
+    exclude: z.string().max(200).optional(),
   })
   .refine((r) => r.image || r.text?.trim(), "写真か文章のどちらかが必要です");
 

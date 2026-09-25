@@ -16,8 +16,12 @@ export async function lookupItemNutrition(item: PantryItem) {
   const nutrition = toItemNutrition(found?.nutrition);
   if (!found || !nutrition) throw new Error("この商品の栄養成分が見つかりませんでした");
   await updatePantryItem(item.id!, {
+    name: item.name,
+    unit: item.unit,
     unitSize: item.unitSize ?? (found.unit === item.unit ? found.unitSize : null) ?? null,
     nutrition,
+    // 出典が変わるので、商品画像は新しい出典ページから取り直す
+    imageUrl: null,
   });
   return found;
 }

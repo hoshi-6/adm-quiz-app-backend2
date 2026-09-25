@@ -33,8 +33,15 @@ export async function POST(req: Request) {
     if (!parsed.success) {
       return Response.json({ error: "写真または文章が正しくありません" }, { status: 400 });
     }
-    const { image, text, today } = parsed.data;
-    const prompt = `今日の日付: ${today}\n${text?.trim() ? `登録したいもの: ${text.trim()}` : "写真に写っている食品を在庫リストにしてください。"}`;
+    const { image, text, today, exclude } = parsed.data;
+    const prompt = [
+      `今日の日付: ${today}`,
+      text?.trim() ? `登録したいもの: ${text.trim()}` : "写真に写っている食品を在庫リストにしてください。",
+      // 探し直しのときは、前回の候補とは別の商品を探してもらう
+      exclude ? `※「${exclude}」ではありません。これとは別の商品を探してください。` : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
     const result = await generateWithWebSearch({
       system: SYSTEM,
       user: image ? [imageBlock(image), { type: "text", text: prompt }] : prompt,
