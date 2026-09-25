@@ -71,7 +71,7 @@ export function Textarea({ className, ...props }: TextareaHTMLAttributes<HTMLTex
 
 export function Field({ label, children, className }: { label: string; children: ReactNode; className?: string }) {
   return (
-    <label className={cx("block", className)}>
+    <label className={cx("block min-w-0", className)}>
       <span className="mb-1 block text-xs font-medium text-muted">{label}</span>
       {children}
     </label>
@@ -145,6 +145,46 @@ export function NumberInput({
         if (max !== undefined) n = Math.min(max, n);
         setText(String(n));
         if (n !== value) onValueChange(n);
+      }}
+      {...props}
+    />
+  );
+}
+
+/**
+ * 空欄にしておける数値入力。空のときは null を返し、勝手に値を入れない
+ * （保存するときに、空欄なら初期値を入れるなどの扱いを呼び出し側で決める）。
+ */
+export function OptionalNumberInput({
+  value,
+  onValueChange,
+  integer,
+  className,
+  ...props
+}: Omit<InputHTMLAttributes<HTMLInputElement>, "value" | "onChange" | "type"> & {
+  value: number | null;
+  onValueChange: (value: number | null) => void;
+  integer?: boolean;
+}) {
+  const [text, setText] = useState(value === null ? "" : String(value));
+  const [prev, setPrev] = useState(value);
+  if (value !== prev) {
+    setPrev(value);
+    const shown = text.trim() === "" ? null : Number(text);
+    if (shown !== value) setText(value === null ? "" : String(value));
+  }
+  return (
+    <input
+      type="text"
+      inputMode={integer ? "numeric" : "decimal"}
+      className={cx(fieldClass, className)}
+      value={text}
+      onChange={(e) => {
+        const t = e.target.value.replace(/[０-９．]/g, (c) => String.fromCharCode(c.charCodeAt(0) - 0xfee0));
+        setText(t);
+        if (t.trim() === "") return onValueChange(null);
+        const n = Number(t);
+        if (Number.isFinite(n) && (!integer || Number.isInteger(n))) onValueChange(n);
       }}
       {...props}
     />

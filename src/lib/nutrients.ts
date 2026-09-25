@@ -1,5 +1,5 @@
 // 栄養素の定義と、プロフィールから1日の目標量を算出するロジック。
-// 目標値は「日本人の食事摂取基準（2025年版）」の成人値をもとにした簡易的な目安。
+// 目標値は厚生労働省「日本人の食事摂取基準（2025年版）」の成人（18歳以上）の値に基づく。
 // 設定画面から個別に上書きできる。
 
 export const NUTRIENT_KEYS = [
@@ -60,45 +60,98 @@ export interface Profile {
   sex: Sex;
   age: number;
   activity: ActivityLevel;
+  /** 体重（kg）。入力があれば、公式の計算式で本人の体格に合わせたエネルギー量を出す */
+  weightKg?: number | null;
+  /** 女性（18〜64歳）で月経があるか。鉄の推奨量が変わる */
+  menstruation?: boolean;
 }
 
-export const DEFAULT_PROFILE: Profile = { sex: "female", age: 30, activity: "normal" };
+export const DEFAULT_PROFILE: Profile = { sex: "female", age: 30, activity: "normal", weightKg: null, menstruation: true };
+export const DEFAULT_AGE = DEFAULT_PROFILE.age;
 
-const ACTIVITY_FACTOR: Record<ActivityLevel, number> = { low: 0.86, normal: 1, high: 1.14 };
+// ---- 日本人の食事摂取基準（2025年版）の成人の値 ----
+// 年齢区分: 18〜29 / 30〜49 / 50〜64 / 65〜74 / 75以上
 
-// 身体活動レベル「ふつう」の推定エネルギー必要量（kcal/日）
-function baseEnergy(sex: Sex, age: number): number {
-  if (sex === "male") {
-    if (age < 30) return 2600;
-    if (age < 50) return 2750;
-    if (age < 65) return 2650;
-    if (age < 75) return 2350;
-    return 2250;
+const AGE_BANDS = [30, 50, 65, 75, Infinity];
+function band(age: number): number {
+  return AGE_BANDS.findIndex((upper) => age < upper);
+}
+
+type ByBand = [number, number, number, number, number];
+const table = (male: ByBand, female: ByBand) => ({ male, female });
+
+/** 推定エネルギー必要量（kcal/日）[身体活動レベル 低い, ふつう, 高い]。75歳以上の「高い」は設定がないので「ふつう」を使う */
+const EER: Record<Sex, [number, number, number][]> = {
+  male: [
+    [2250, 2600, 3000],
+    [2350, 2750, 3150],
+    [2250, 2650, 3000],
+    [2100, 2350, 2650],
+    [1850, 2250, 2250],
+  ],
+  female: [
+    [1700, 1950, 2250],
+    [1750, 2050, 2350],
+    [1700, 1950, 2250],
+    [1650, 1850, 2050],
+    [1450, 1750, 1750],
+  ],
+};
+const LEVEL: Record<ActivityLevel, 0 | 1 | 2> = { low: 0, normal: 1, high: 2 };
+
+/** 体重1kgあたりの基礎代謝基準値（kcal/kg/日） */
+const BMR_PER_KG = table([23.7, 22.5, 21.8, 21.6, 21.5], [22.1, 21.9, 20.7, 20.7, 20.7]);
+/** 身体活動レベルの値 [低い, ふつう, 高い] */
+const PAL: [number, number, number][] = [
+  [1.5, 1.75, 2.0],
+  [1.5, 1.75, 2.0],
+  [1.5, 1.75, 2.0],
+  [1.5, 1.7, 1.9],
+  [1.4, 1.65, 1.65],
+];
+
+/** たんぱく質 推奨量（g/日）と 目標量の下限（%エネルギー） */
+const PROTEIN_RDA = table([65, 65, 65, 60, 60], [50, 50, 50, 50, 50]);
+const PROTEIN_DG_MIN: ByBand = [13, 13, 14, 15, 15];
+/** 食物繊維 目標量（g/日以上） */
+const FIBER = table([20, 22, 22, 21, 20], [18, 18, 18, 18, 17]);
+/** カルシウム 推奨量（mg/日） */
+const CALCIUM = table([800, 750, 750, 750, 750], [650, 650, 650, 650, 600]);
+/** 鉄 推奨量（mg/日）。女性は月経なし／月経あり（月経ありは18〜64歳のみ） */
+const IRON_MALE: ByBand = [7.0, 7.5, 7.0, 7.0, 6.5];
+const IRON_FEMALE: ByBand = [6.0, 6.0, 6.0, 6.0, 5.5];
+const IRON_FEMALE_MENSTRUATION: ByBand = [10.0, 10.5, 10.5, 6.0, 5.5];
+/** ビタミンA 推奨量（µgRAE/日） */
+const VITAMIN_A = table([850, 900, 900, 850, 800], [650, 700, 700, 700, 650]);
+
+/** 推定エネルギー必要量。体重があれば「基礎代謝基準値 × 体重 × 身体活動レベル」、なければ参照体位での値 */
+export function estimateEnergy(p: Profile): number {
+  const b = band(p.age);
+  const level = LEVEL[p.activity];
+  if (p.weightKg && p.weightKg > 0) {
+    return Math.round((BMR_PER_KG[p.sex][b] * p.weightKg * PAL[b][level]) / 10) * 10;
   }
-  if (age < 30) return 1950;
-  if (age < 50) return 2050;
-  if (age < 65) return 1950;
-  if (age < 75) return 1850;
-  return 1750;
+  return EER[p.sex][b][level];
 }
 
 export function calcTargets(p: Profile): Nutrients {
-  const energy = Math.round((baseEnergy(p.sex, p.age) * ACTIVITY_FACTOR[p.activity]) / 10) * 10;
+  const b = band(p.age);
   const male = p.sex === "male";
-  const senior = p.age >= 65;
+  const energy = estimateEnergy(p);
   return {
     energy,
-    protein: male ? 65 : 50,
-    // 脂質はエネルギーの25%、炭水化物は57.5%を目安にする
+    // 推奨量と、目標量（%エネルギー）の下限から求めた量の多い方
+    protein: Math.max(PROTEIN_RDA[p.sex][b], Math.round((energy * PROTEIN_DG_MIN[b]) / 100 / 4)),
+    // 目標量（脂質 20〜30%、炭水化物 50〜65%）の中央値
     fat: Math.round((energy * 0.25) / 9),
     carbs: Math.round((energy * 0.575) / 4),
-    fiber: male ? (senior ? 20 : 22) : senior ? 17 : 18,
-    calcium: male ? (p.age < 30 ? 800 : 750) : 650,
-    // 女性は月経ありの値。閉経後などは設定画面で調整する
-    iron: male ? 7.5 : p.age < 65 ? 10.5 : 6.0,
-    vitaminA: male ? (p.age < 30 ? 850 : 900) : 700,
+    fiber: FIBER[p.sex][b],
+    calcium: CALCIUM[p.sex][b],
+    iron: male ? IRON_MALE[b] : (p.menstruation ?? true) ? IRON_FEMALE_MENSTRUATION[b] : IRON_FEMALE[b],
+    vitaminA: VITAMIN_A[p.sex][b],
     vitaminC: 100,
-    vitaminD: 9,
+    vitaminD: 9.0,
+    // 目標量（未満）
     salt: male ? 7.5 : 6.5,
   };
 }

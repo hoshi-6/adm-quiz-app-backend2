@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "@/lib/toast";
 import type { PantryScanResult } from "@/lib/ai/schemas";
 import { addToPantry, todayStr } from "@/lib/db";
 import { callApi } from "@/lib/hooks";
@@ -51,6 +52,7 @@ export function PhotoImport() {
     );
     setRows(null);
     setPreview(null);
+    toast(`${picked.length}件を在庫に追加しました`);
   }
 
   const count = rows?.filter((r) => r.checked).length ?? 0;

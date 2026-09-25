@@ -1,6 +1,7 @@
 "use client";
 
 import { useLiveQuery } from "dexie-react-hooks";
+import { toast } from "@/lib/toast";
 import { useState, type FormEvent } from "react";
 import type { Product } from "@/app/api/products/route";
 import { FoodNameInput } from "@/components/pantry/FoodNameInput";
@@ -40,6 +41,7 @@ export default function PantryPage() {
     setForm({ ...form, name: "", quantity: 1, expiresOn: "" });
     setSearching(false);
     await addToPantry([{ name, category: tab, quantity: form.quantity, unit: form.unit, expiresOn: form.expiresOn || undefined }]);
+    toast(`${name}を追加しました`);
   }
 
   function pickProduct(p: Product) {
@@ -49,13 +51,18 @@ export default function PantryPage() {
 
   async function addPresetSeasonings() {
     const have = new Set((items ?? []).filter((i) => i.category === "seasoning").map((i) => i.name));
-    await addToPantry(SEASONING_PRESET.filter((n) => !have.has(n)).map((name) => ({ name, category: "seasoning" as const, quantity: 1, unit: "本" })));
+    const adding = SEASONING_PRESET.filter((n) => !have.has(n));
+    await addToPantry(adding.map((name) => ({ name, category: "seasoning" as const, quantity: 1, unit: "本" })));
+    toast(adding.length ? `調味料を${adding.length}件追加しました` : "基本の調味料はすべて登録済みです");
   }
 
   async function changeQty(item: PantryItem, delta: number) {
     const quantity = Math.max(0, Math.round((item.quantity + delta) * 100) / 100);
     if (quantity === 0 && !confirm(`「${item.name}」を使い切りましたか？在庫から削除します。`)) return;
-    if (quantity === 0) await deletePantryItem(item.id!);
+    if (quantity === 0) {
+      await deletePantryItem(item.id!);
+      toast(`${item.name}を在庫から削除しました`);
+    }
     else await updatePantryItem(item.id!, { quantity });
   }
 

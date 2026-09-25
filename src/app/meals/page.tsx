@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, type FormEvent } from "react";
+import { toast } from "@/lib/toast";
 import { NutrientBars } from "@/components/NutrientBars";
 import { Button, Card, ErrorNote, Field, Input, PageHeader, Select, Spinner, Textarea, cx } from "@/components/ui";
 import { PhotoButton } from "@/components/PhotoButton";
@@ -55,6 +56,7 @@ export default function MealsPage() {
 
   async function saveEntries(entries: { name: string; amount: string; nutrients: Nutrients }[]) {
     await addMeals(entries.map((e) => ({ ...e, date, mealType })));
+    toast(`${MEAL_LABELS[mealType]}に${entries.length}件記録しました`);
   }
 
   async function saveDrafts() {

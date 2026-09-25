@@ -1,6 +1,7 @@
 "use client";
 
 import { useLiveQuery } from "dexie-react-hooks";
+import { toast } from "@/lib/toast";
 import Link from "next/link";
 import { useEffect, useState, type FormEvent } from "react";
 import { Badge, Button, Card, ErrorNote, Field, NumberInput, PageHeader, Select, Spinner, Textarea } from "@/components/ui";
@@ -210,8 +211,10 @@ function SuggestionCard({ s, servings, mealType, pantry }: { s: Suggestion; serv
 
   async function save() {
     await addMeals([{ date: todayStr(), mealType, name: s.title, amount: "1人前", nutrients: s.nutrientsPerServing }]);
-    await consumePantry(deduct.filter((d) => d.checked).map((d) => ({ id: d.id, amount: d.amount })));
+    const used = deduct.filter((d) => d.checked);
+    await consumePantry(used.map((d) => ({ id: d.id, amount: d.amount })));
     setStep("saved");
+    toast(used.length ? `記録して、在庫を${used.length}件減らしました` : "食事を記録しました");
   }
 
   return (

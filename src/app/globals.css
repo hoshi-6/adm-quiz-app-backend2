@@ -51,3 +51,23 @@ body {
   color: var(--fg);
   -webkit-tap-highlight-color: transparent;
 }
+
+@keyframes toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
+/* iPhone の Safari では日付入力が枠からはみ出すため、幅を枠に合わせる */
+input[type="date"] {
+  -webkit-appearance: none;
+  appearance: none;
+  min-width: 0;
+  max-width: 100%;
+  display: block;
+  min-height: 2.5rem;
+}
+input[type="date"]::-webkit-date-and-time-value {
+  text-align: left;
+}

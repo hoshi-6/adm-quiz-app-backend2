@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 import { startSync, useSyncState, type SyncStatus } from "@/lib/sync";
 import { PasscodeGate } from "./PasscodeGate";
+import { Toaster } from "./Toaster";
 import { cx } from "./ui";
 
 const NAV = [
@@ -90,6 +91,8 @@ export function AppShell({ children }: { children: ReactNode }) {
           {sync.status === "needs-passcode" ? <PasscodeGate /> : children}
         </div>
       </main>
+
+      <Toaster />
 
       {/* スマホ: 下部タブ */}
       <nav className="fixed inset-x-0 bottom-0 z-20 grid grid-cols-6 border-t border-line bg-surface/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
