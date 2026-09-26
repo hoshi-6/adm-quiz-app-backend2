@@ -114,7 +114,7 @@ function SettingsForm({ initial }: { initial: Settings }) {
         }
       />
 
-      <div className="grid gap-4 md:grid-cols-2">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         <Card title="プロフィール">
           <div className="grid grid-cols-2 gap-3">
             <Field label="性別">

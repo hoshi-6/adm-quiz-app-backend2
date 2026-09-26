@@ -3,12 +3,13 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { toast } from "@/lib/toast";
 import Link from "next/link";
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useState, type FormEvent, type ReactNode } from "react";
 import { Badge, Button, Card, ErrorNote, Field, NumberInput, PageHeader, Select, Spinner, Textarea } from "@/components/ui";
 import { SUGGEST_STYLES, type SuggestRequest, type Suggestion } from "@/lib/ai/schemas";
 import { MEAL_LABELS, addMeals, consumePantry, daysUntil, db, todayStr, type MealType, type PantryItem } from "@/lib/db";
 import { callApi, useDayIntake, useSettings } from "@/lib/hooks";
 import { IngredientDeduct, buildDeductRows, type DeductRow } from "@/components/IngredientDeduct";
+import { ConsultChat, type ChatMessage } from "@/components/ConsultChat";
 import { NutrientTable } from "@/components/NutrientBars";
 import { NUTRIENT_KEYS, NUTRIENTS, completeNutrients, fmt } from "@/lib/nutrients";
 
@@ -25,6 +26,9 @@ export default function SuggestPage() {
   const [opts, setOpts] = useState({ mealType: "dinner" as MealType, servings: 1, maxMinutes: 30, prioritizeExpiring: true, request: "" });
   const [slots, setSlots] = useState<Slot[]>([]);
   const [servings, setServings] = useState(1);
+  // 作ると決めた献立（その献立について AI に相談できる）と、案ごとの相談の履歴
+  const [selected, setSelected] = useState<number | null>(null);
+  const [chats, setChats] = useState<Record<number, ChatMessage[]>>({});
   const loading = slots.some((s) => s.state === "loading");
 
   // 前回の提案を復元（タブを切り替えても消えないように）
@@ -37,10 +41,37 @@ export default function SuggestPage() {
           // eslint-disable-next-line react-hooks/set-state-in-effect -- 初回マウント時に一度だけ復元する
           setSlots(saved.suggestions.map((suggestion: Suggestion) => ({ state: "done", suggestion })));
           setServings(saved.servings ?? 1);
+          setSelected(saved.selected ?? null);
+          setChats(saved.chats ?? {});
         }
       }
     } catch {}
   }, []);
+
+  // 提案・選んだ献立・相談の履歴を保存（タブを切り替えても続きから相談できるように）
+  useEffect(() => {
+    if (!slots.length || loading) return;
+    const done = slots.flatMap((s) => (s.state === "done" ? [s.suggestion] : []));
+    // 失敗した案を除くと番号がずれるので、選んだ献立の番号を詰め直す
+    const index = (i: number) => slots.slice(0, i).filter((s) => s.state === "done").length;
+    const keep = (i: number) => slots[i]?.state === "done";
+    try {
+      localStorage.setItem(
+        STORAGE_KEY,
+        JSON.stringify({
+          date: todayStr(),
+          servings,
+          suggestions: done,
+          selected: selected !== null && keep(selected) ? index(selected) : null,
+          chats: Object.fromEntries(Object.entries(chats).filter(([i]) => keep(Number(i))).map(([i, m]) => [index(Number(i)), m])),
+        }),
+      );
+    } catch {}
+  }, [slots, loading, servings, selected, chats]);
+
+  function updateSuggestion(i: number, suggestion: Suggestion) {
+    setSlots((prev) => prev.map((p, j) => (j === i ? { state: "done", suggestion } : p)));
+  }
 
   function submit(e: FormEvent) {
     e.preventDefault();
@@ -68,6 +99,8 @@ export default function SuggestPage() {
     setServings(opts.servings);
     const next: Slot[] = SUGGEST_STYLES.map(() => ({ state: "loading" }));
     setSlots(next);
+    setSelected(null);
+    setChats({});
 
     // 3案を同時に依頼し、届いたものから表示する（1案ずつ順番に作るより速い）
     SUGGEST_STYLES.forEach((_, style) => {
@@ -79,13 +112,8 @@ export default function SuggestPage() {
           next[style] = { state: "error", message: (err as Error).message };
         })
         .finally(() => {
-          setSlots([...next]);
-          if (next.every((s) => s.state !== "loading")) {
-            const done = next.flatMap((s) => (s.state === "done" ? [s.suggestion] : []));
-            try {
-              localStorage.setItem(STORAGE_KEY, JSON.stringify({ date: todayStr(), servings: opts.servings, suggestions: done }));
-            } catch {}
-          }
+          // ほかの案を相談で書き換えている途中でも消さないよう、届いた案だけを差し替える
+          setSlots((prev) => prev.map((p, j) => (j === style ? next[style] : p)));
         });
     });
   }
@@ -166,22 +194,61 @@ export default function SuggestPage() {
       {slots.length > 0 && !allFailed && (
         <>
           <p className="mb-4 rounded-2xl bg-brand/10 px-4 py-3 text-sm leading-relaxed">{summary}</p>
-          <div className="grid gap-4 lg:grid-cols-3">
-            {slots.map((slot, i) =>
-              slot.state === "loading" ? (
-                <Card key={i} className="flex min-h-48 flex-col items-center justify-center gap-2 text-sm text-muted">
-                  <Spinner />
-                  {SUGGEST_STYLES[i]}の献立を考えています…
-                </Card>
-              ) : slot.state === "error" ? (
-                <Card key={i} className="text-sm text-muted">
-                  {SUGGEST_STYLES[i]}の提案は作れませんでした（{slot.message}）
-                </Card>
-              ) : (
-                <SuggestionCard key={i} s={slot.suggestion} servings={servings} mealType={opts.mealType} pantry={pantry ?? []} />
-              ),
-            )}
-          </div>
+          {selected !== null && slots[selected]?.state === "done" ? (
+            <div className="mx-auto max-w-2xl space-y-3">
+              <button type="button" className="text-sm text-brand" onClick={() => setSelected(null)}>
+                ← ほかの案も見る
+              </button>
+              <SuggestionCard
+                key={selected}
+                s={(slots[selected] as { suggestion: Suggestion }).suggestion}
+                servings={servings}
+                mealType={opts.mealType}
+                pantry={pantry ?? []}
+                selected
+                consult={
+                  <ConsultChat
+                    suggestion={(slots[selected] as { suggestion: Suggestion }).suggestion}
+                    messages={chats[selected] ?? []}
+                    onMessages={(m) => setChats((c) => ({ ...c, [selected]: m }))}
+                    onUpdate={(s) => updateSuggestion(selected, s)}
+                    pantry={pantry ?? []}
+                    servings={servings}
+                    mealType={MEAL_LABELS[opts.mealType]}
+                    preferences={settings.preferences}
+                  />
+                }
+              />
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+              {slots.map((slot, i) =>
+                slot.state === "loading" ? (
+                  <Card key={i} className="flex min-h-48 flex-col items-center justify-center gap-2 text-sm text-muted">
+                    <Spinner />
+                    {SUGGEST_STYLES[i]}の献立を考えています…
+                  </Card>
+                ) : slot.state === "error" ? (
+                  <Card key={i} className="text-sm text-muted">
+                    {SUGGEST_STYLES[i]}の提案は作れませんでした（{slot.message}）
+                  </Card>
+                ) : (
+                  <SuggestionCard
+                    key={i}
+                    s={slot.suggestion}
+                    servings={servings}
+                    mealType={opts.mealType}
+                    pantry={pantry ?? []}
+                    onSelect={() => {
+                      setSelected(i);
+                      window.scrollTo({ top: 0, behavior: "smooth" });
+                    }}
+                    chatCount={chats[i]?.length ?? 0}
+                  />
+                ),
+              )}
+            </div>
+          )}
           <p className="mt-4 text-xs text-muted">※ 栄養素はAIによる推定値です。アレルギーや持病がある場合は、材料を必ずご自身で確認してください。</p>
         </>
       )}
@@ -189,7 +256,26 @@ export default function SuggestPage() {
   );
 }
 
-function SuggestionCard({ s, servings, mealType, pantry }: { s: Suggestion; servings: number; mealType: MealType; pantry: PantryItem[] }) {
+function SuggestionCard({
+  s,
+  servings,
+  mealType,
+  pantry,
+  selected,
+  onSelect,
+  consult,
+  chatCount = 0,
+}: {
+  s: Suggestion;
+  servings: number;
+  mealType: MealType;
+  pantry: PantryItem[];
+  /** 作ると決めた献立として大きく表示する */
+  selected?: boolean;
+  onSelect?: () => void;
+  consult?: ReactNode;
+  chatCount?: number;
+}) {
   const [step, setStep] = useState<"idle" | "confirm" | "saved">("idle");
   const [deduct, setDeduct] = useState<DeductRow[]>([]);
 
@@ -227,7 +313,7 @@ function SuggestionCard({ s, servings, mealType, pantry }: { s: Suggestion; serv
         ))}
       </div>
 
-      <details className="mb-3 text-sm">
+      <details className="mb-3 text-sm" open={selected || undefined}>
         <summary className="cursor-pointer font-medium text-brand">材料（{servings}人分）と作り方</summary>
         <ul className="mt-2 list-disc space-y-0.5 pl-5">
           {s.ingredients.map((x) => (
@@ -245,10 +331,17 @@ function SuggestionCard({ s, servings, mealType, pantry }: { s: Suggestion; serv
         <NutrientTable nutrients={completeNutrients(s.nutrientsPerServing)} caption="1人前あたり" />
       </div>
 
+      {consult && <div className="mb-3">{consult}</div>}
+
       {step === "idle" && (
-        <Button variant="secondary" className="mt-auto" onClick={openConfirm}>
-          これを食べた（記録する）
-        </Button>
+        <div className="mt-auto flex flex-col gap-2">
+          {onSelect && (
+            <Button onClick={onSelect}>{chatCount > 0 ? "この献立の相談を続ける" : "この献立で作る（AIに相談）"}</Button>
+          )}
+          <Button variant="secondary" onClick={openConfirm}>
+            これを食べた（記録する）
+          </Button>
+        </div>
       )}
 
       {step === "confirm" && (

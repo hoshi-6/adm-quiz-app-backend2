@@ -22,7 +22,7 @@ export default function HomePage() {
     <>
       <PageHeader title="今日の栄養" description={date} />
 
-      <div className="grid gap-4 md:grid-cols-3">
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
         <Link
           href="/suggest"
           className="flex flex-col justify-between rounded-2xl bg-brand p-4 text-white shadow-sm transition hover:bg-brand-strong md:col-span-1"
@@ -64,20 +64,20 @@ export default function HomePage() {
         <ScoreCard intake={intake} recordedToday={meals.length > 0} />
       </div>
 
-      <div className="mt-4 grid gap-4 md:grid-cols-3">
+      <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-3">
         <Card title="摂取量 / 目標" className="md:col-span-2" action={<Link href="/trends" className="text-sm text-brand">推移を見る</Link>}>
           <NutrientBars intake={intake} targets={targets} />
         </Card>
 
-        <div className="flex flex-col gap-4">
+        <div className="flex min-w-0 flex-col gap-4">
           <Card title="今日食べたもの" action={<Link href="/meals" className="text-sm text-brand">追加</Link>}>
             {meals.length === 0 ? (
               <p className="text-sm text-muted">記録なし</p>
             ) : (
               <ul className="space-y-1.5 text-sm">
                 {meals.map((m) => (
-                  <li key={m.id} className="flex justify-between gap-2">
-                    <span className="truncate">
+                  <li key={m.id} className="flex min-w-0 justify-between gap-2">
+                    <span className="min-w-0 break-words">
                       <span className="mr-1.5 text-xs text-muted">{MEAL_LABELS[m.mealType]}</span>
                       {m.name}
                     </span>
@@ -97,7 +97,7 @@ export default function HomePage() {
                   const d = daysUntil(i.expiresOn!);
                   return (
                     <li key={i.id} className="flex justify-between gap-2">
-                      <span className="truncate">{i.name}</span>
+                      <span className="min-w-0 break-words">{i.name}</span>
                       <Badge tone={d < 0 ? "danger" : "warn"}>{d < 0 ? "期限切れ" : d === 0 ? "今日まで" : `あと${d}日`}</Badge>
                     </li>
                   );

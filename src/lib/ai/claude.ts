@@ -32,10 +32,13 @@ export function imageBlock(image: { mediaType: "image/jpeg" | "image/png" | "ima
 /** system + user プロンプト（文字列、または画像を含むブロック）を送り、スキーマどおりの JSON を受け取る */
 export async function generateStructured<T extends z.ZodType>(opts: {
   system: string;
-  user: string | BetaContentBlockParam[];
+  /** 1回きりの質問。会話を続けるときは messages を渡す */
+  user?: string | BetaContentBlockParam[];
+  messages?: BetaMessageParam[];
   schema: T;
   effort?: "low" | "medium" | "high";
 }): Promise<z.infer<T>> {
+  const messages = opts.messages ?? [{ role: "user" as const, content: opts.user ?? "" }];
   const request = (fast: boolean) =>
     getClient().beta.messages.parse({
       model: MODEL,
@@ -50,7 +53,7 @@ export async function generateStructured<T extends z.ZodType>(opts: {
       fallbacks: "default",
       ...(fast ? { speed: "fast" as const } : {}),
       system: opts.system,
-      messages: [{ role: "user", content: opts.user }],
+      messages,
     });
 
   let response;

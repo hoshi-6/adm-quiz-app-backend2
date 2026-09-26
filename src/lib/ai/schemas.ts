@@ -139,3 +139,29 @@ export const SuggestRequestSchema = z.object({
   eatenToday: z.array(z.string().max(200)).max(50),
 });
 export type SuggestRequest = z.infer<typeof SuggestRequestSchema>;
+
+// ---- 選んだ献立について AI に相談する ----
+
+export const ConsultReplySchema = z.object({
+  reply: z.string().describe("ユーザーへの返事（日本語、簡潔に。箇条書き可）"),
+  updatedSuggestion: SuggestionSchema.nullable().describe(
+    "材料の置き換え・分量や人数の変更など、献立の内容が変わるときだけ、変更後の献立全体。変わらないときは null",
+  ),
+});
+export type ConsultReply = z.infer<typeof ConsultReplySchema>;
+
+export const ConsultMessageSchema = z.object({
+  role: z.enum(["user", "assistant"]),
+  content: z.string().min(1).max(2000),
+});
+export type ConsultMessage = z.infer<typeof ConsultMessageSchema>;
+
+export const ConsultRequestSchema = SuggestRequestSchema.pick({ mealType: true, servings: true, preferences: true, pantry: true }).extend({
+  suggestion: SuggestionSchema,
+  messages: z
+    .array(ConsultMessageSchema)
+    .min(1)
+    .max(40)
+    .refine((m) => m[m.length - 1].role === "user", "最後はユーザーの発言にしてください"),
+});
+export type ConsultRequest = z.infer<typeof ConsultRequestSchema>;
