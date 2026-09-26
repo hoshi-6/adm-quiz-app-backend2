@@ -8,6 +8,7 @@ import { Badge, Button, Card, ErrorNote, Field, NumberInput, PageHeader, Select,
 import { SUGGEST_STYLES, type SuggestRequest, type Suggestion } from "@/lib/ai/schemas";
 import { MEAL_LABELS, addMeals, consumePantry, daysUntil, db, todayStr, type MealType, type PantryItem } from "@/lib/db";
 import { callApi, useDayIntake, useSettings } from "@/lib/hooks";
+import { IngredientDeduct, buildDeductRows, type DeductRow } from "@/components/IngredientDeduct";
 import { NutrientTable } from "@/components/NutrientBars";
 import { NUTRIENT_KEYS, NUTRIENTS, completeNutrients, fmt } from "@/lib/nutrients";
 
@@ -188,32 +189,19 @@ export default function SuggestPage() {
   );
 }
 
-/** 提案の食材名を在庫と照らし合わせる（完全一致を優先し、なければ部分一致） */
-function matchPantry(name: string, pantry: PantryItem[]) {
-  const ingredients = pantry.filter((p) => p.category === "ingredient");
-  return ingredients.find((p) => p.name === name) ?? ingredients.find((p) => p.name.includes(name) || name.includes(p.name));
-}
-
 function SuggestionCard({ s, servings, mealType, pantry }: { s: Suggestion; servings: number; mealType: MealType; pantry: PantryItem[] }) {
   const [step, setStep] = useState<"idle" | "confirm" | "saved">("idle");
-  const [deduct, setDeduct] = useState<{ id: number; name: string; unit: string; have: number; amount: number; checked: boolean }[]>([]);
+  const [deduct, setDeduct] = useState<DeductRow[]>([]);
 
   function openConfirm() {
-    const rows = s.pantryUsage.flatMap((u) => {
-      const item = matchPantry(u.name, pantry);
-      if (!item?.id) return [];
-      // 単位が違うときは量を推測できないので 0 にして、利用者に入れてもらう
-      const amount = item.unit === u.unit ? Math.min(u.amount, item.quantity) : 0;
-      return [{ id: item.id, name: item.name, unit: item.unit, have: item.quantity, amount, checked: amount > 0 }];
-    });
-    setDeduct(rows);
+    setDeduct(buildDeductRows(s, pantry));
     setStep("confirm");
   }
 
   async function save() {
     await addMeals([{ date: todayStr(), mealType, name: s.title, amount: "1人前", nutrients: completeNutrients(s.nutrientsPerServing) }]);
-    const used = deduct.filter((d) => d.checked);
-    await consumePantry(used.map((d) => ({ id: d.id, amount: d.amount })));
+    const used = deduct.filter((d) => d.itemId !== null && d.amount > 0);
+    await consumePantry(used.map((d) => ({ id: d.itemId!, amount: d.amount })));
     setStep("saved");
     toast(used.length ? `記録して、在庫を${used.length}件減らしました` : "食事を記録しました");
   }
@@ -228,12 +216,12 @@ function SuggestionCard({ s, servings, mealType, pantry }: { s: Suggestion; serv
 
       <div className="mb-3 flex flex-wrap gap-1">
         {s.pantryUsage.map((p) => (
-          <Badge key={p.name} tone="good">
+          <Badge key={p.name} tone="good" wrap>
             {p.name}
           </Badge>
         ))}
         {s.needToBuy.map((p) => (
-          <Badge key={p} tone="warn">
+          <Badge key={p} tone="warn" wrap>
             買う: {p}
           </Badge>
         ))}
@@ -265,45 +253,14 @@ function SuggestionCard({ s, servings, mealType, pantry }: { s: Suggestion; serv
 
       {step === "confirm" && (
         <div className="mt-auto rounded-xl border border-line p-3">
-          <p className="mb-2 text-sm font-medium">在庫から減らす食材</p>
-          {deduct.length === 0 ? (
-            <p className="mb-2 text-xs text-muted">在庫と一致する食材はありませんでした。食事の記録だけ行います。</p>
-          ) : (
-            <ul className="mb-3 space-y-2">
-              {deduct.map((d, j) => (
-                <li key={d.id} className="flex items-center gap-2 text-sm">
-                  <input
-                    type="checkbox"
-                    className="h-4 w-4 shrink-0 accent-[var(--brand)]"
-                    checked={d.checked}
-                    onChange={(e) => setDeduct(deduct.map((x, k) => (k === j ? { ...x, checked: e.target.checked } : x)))}
-                    aria-label={`${d.name}を減らす`}
-                  />
-                  <span className="min-w-0 flex-1">
-                    <span className="block truncate">{d.name}</span>
-                    <span className="block text-xs text-muted">
-                      残り {d.have}
-                      {d.unit}
-                    </span>
-                  </span>
-                  <span className="w-20 shrink-0">
-                    <NumberInput
-                      className="py-1 text-right"
-                      min={0}
-                      max={d.have}
-                      value={d.amount}
-                      onValueChange={(amount) => setDeduct(deduct.map((x, k) => (k === j ? { ...x, amount, checked: amount > 0 } : x)))}
-                      aria-label={`${d.name}の使用量`}
-                    />
-                  </span>
-                  <span className="w-8 shrink-0 text-xs text-muted">{d.unit}</span>
-                </li>
-              ))}
-            </ul>
-          )}
+          <p className="mb-1 text-sm font-medium">使った材料と、減らす在庫</p>
+          <p className="mb-3 text-xs text-muted">違う在庫が選ばれていたら、選び直してください。在庫にない材料も、家にあれば選べます。</p>
+          <div className="mb-3">
+            <IngredientDeduct rows={deduct} onChange={setDeduct} pantry={pantry} />
+          </div>
           <div className="flex gap-2">
             <Button className="flex-1" onClick={save}>
-              {deduct.some((d) => d.checked) ? "記録して在庫を減らす" : "記録する"}
+              {deduct.some((d) => d.itemId !== null && d.amount > 0) ? "記録して在庫を減らす" : "記録する"}
             </Button>
             <Button variant="ghost" onClick={() => setStep("idle")}>
               戻る

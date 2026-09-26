@@ -80,14 +80,17 @@ export function Field({ label, children, className }: { label: string; children:
   );
 }
 
-export function Badge({ tone = "neutral", children }: { tone?: "neutral" | "warn" | "danger" | "good"; children: ReactNode }) {
+export function Badge({ tone = "neutral", wrap, children }: { tone?: "neutral" | "warn" | "danger" | "good"; wrap?: boolean; children: ReactNode }) {
   const tones = {
     neutral: "bg-subtle text-muted",
     warn: "bg-warn/15 text-warn",
     danger: "bg-danger/15 text-danger",
     good: "bg-brand/15 text-brand",
   };
-  return <span className={cx("inline-block shrink-0 whitespace-nowrap rounded-full px-2 py-0.5 text-xs font-medium", tones[tone])}>{children}</span>;
+  // wrap のときは長い名前でも折り返して全部見せる
+  return (
+    <span className={cx("inline-block rounded-full px-2 py-0.5 text-xs font-medium", wrap ? "max-w-full break-words" : "shrink-0 whitespace-nowrap", tones[tone])}>{children}</span>
+  );
 }
 
 export function ErrorNote({ message }: { message: string | null }) {

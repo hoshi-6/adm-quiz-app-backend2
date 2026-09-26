@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useLiveQuery } from "dexie-react-hooks";
 import { NutrientBars } from "@/components/NutrientBars";
+import { ScoreCard } from "@/components/ScoreCard";
 import { Badge, Card, PageHeader } from "@/components/ui";
 import { MEAL_LABELS, daysUntil, db } from "@/lib/db";
 import { useDayIntake } from "@/lib/hooks";
@@ -57,6 +58,10 @@ export default function HomePage() {
             </div>
           )}
         </Card>
+      </div>
+
+      <div className="mt-4">
+        <ScoreCard intake={intake} recordedToday={meals.length > 0} />
       </div>
 
       <div className="mt-4 grid gap-4 md:grid-cols-3">

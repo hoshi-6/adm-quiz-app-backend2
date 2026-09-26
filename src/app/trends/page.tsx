@@ -5,6 +5,7 @@ import { useEffect, useRef, useState } from "react";
 import { Badge, Card, PageHeader, cx } from "@/components/ui";
 import { db, todayStr } from "@/lib/db";
 import { useSettings } from "@/lib/hooks";
+import { averageScore, scoreDay, scoreLabel } from "@/lib/score";
 import { GROUP_LABELS, NUTRIENT_GROUPS, NUTRIENT_KEYS, NUTRIENTS, emptyNutrients, fmt, sumNutrients, type NutrientKey, type Nutrients } from "@/lib/nutrients";
 
 const RANGES = [
@@ -32,7 +33,8 @@ function lastDays(n: number): string[] {
 export default function TrendsPage() {
   const { targets } = useSettings();
   const [range, setRange] = useState(7);
-  const [key, setKey] = useState<NutrientKey>("energy");
+  // "score" は 1 日のスコア、それ以外は栄養素
+  const [key, setKey] = useState<NutrientKey | "score">("score");
   const dates = lastDays(range);
 
   const days = useLiveQuery(async (): Promise<Day[]> => {
@@ -47,10 +49,12 @@ export default function TrendsPage() {
   const recorded = (days ?? []).filter((d) => d.total);
   const average = recorded.length ? sumNutrients(recorded.map((d) => d.total!)) : emptyNutrients();
   for (const k of NUTRIENT_KEYS) average[k] = recorded.length ? average[k] / recorded.length : 0;
+  const scores = (days ?? []).map((d) => (d.total ? scoreDay(d.total, targets).score : null));
+  const avgScore = averageScore(scores);
 
   return (
     <>
-      <PageHeader title="栄養の推移" description="日ごとの摂取量と、期間の平均を確認できます" />
+      <PageHeader title="栄養の推移" description="日ごとのスコアと摂取量、期間の平均を確認できます" />
 
       {/* 期間と栄養素の切り替え（グラフの上に1列で並べる） */}
       <div className="mb-4 flex flex-wrap items-center gap-3">
@@ -70,6 +74,13 @@ export default function TrendsPage() {
 
       <Card className="mb-4">
         <div className="-mx-1 mb-3 flex gap-1.5 overflow-x-auto px-1 pb-1" role="group" aria-label="栄養素">
+          <button
+            onClick={() => setKey("score")}
+            aria-pressed={key === "score"}
+            className={cx("shrink-0 rounded-full border px-3 py-1 text-xs", key === "score" ? "border-brand bg-brand/10 font-medium text-brand" : "border-line text-muted")}
+          >
+            スコア
+          </button>
           {NUTRIENT_KEYS.map((k) => (
             <button
               key={k}
@@ -84,14 +95,36 @@ export default function TrendsPage() {
             </button>
           ))}
         </div>
-        <h2 className="text-sm font-semibold">
-          {NUTRIENTS[key].label}（{NUTRIENTS[key].unit}／日）
-        </h2>
-        <p className="mb-2 text-xs text-muted">
-          {NUTRIENTS[key].kind === "max" ? "上限" : "目標"} {fmt(targets[key], key)}
-          {NUTRIENTS[key].unit} ・ 記録した日の平均 {recorded.length ? `${fmt(average[key], key)}${NUTRIENTS[key].unit}` : "—"}
-        </p>
-        {days && <DailyChart days={days} nutrient={key} target={targets[key]} />}
+        {key === "score" ? (
+          <>
+            <h2 className="text-sm font-semibold">1日の栄養スコア（100点満点）</h2>
+            <p className="mb-2 text-xs text-muted">
+              期間の平均 {avgScore === null ? "—" : `${avgScore}点（${scoreLabel(avgScore).text}）`}・記録した日だけで計算
+            </p>
+            {days && <DailyChart days={days} values={scores} target={80} label="スコア" unit="点" targetLabel="目安80点" format={(v) => String(Math.round(v))} />}
+          </>
+        ) : (
+          <>
+            <h2 className="text-sm font-semibold">
+              {NUTRIENTS[key].label}（{NUTRIENTS[key].unit}／日）
+            </h2>
+            <p className="mb-2 text-xs text-muted">
+              {NUTRIENTS[key].kind === "max" ? "上限" : "目標"} {fmt(targets[key], key)}
+              {NUTRIENTS[key].unit} ・ 記録した日の平均 {recorded.length ? `${fmt(average[key], key)}${NUTRIENTS[key].unit}` : "—"}
+            </p>
+            {days && (
+              <DailyChart
+                days={days}
+                values={days.map((d) => (d.total ? d.total[key] : null))}
+                target={targets[key]}
+                label={NUTRIENTS[key].label}
+                unit={NUTRIENTS[key].unit}
+                targetLabel={NUTRIENTS[key].kind === "max" ? "上限" : "目標"}
+                format={(v) => fmt(v, key)}
+              />
+            )}
+          </>
+        )}
       </Card>
 
       <Card title={`期間の平均（記録した${recorded.length}日）`}>
@@ -159,7 +192,24 @@ function niceStep(max: number) {
   return (n <= 1 ? 1 : n <= 2 ? 2 : n <= 2.5 ? 2.5 : n <= 5 ? 5 : 10) * pow;
 }
 
-function DailyChart({ days, nutrient, target }: { days: Day[]; nutrient: NutrientKey; target: number }) {
+/** 日ごとの棒グラフ。栄養素の摂取量にも、スコアにも使う */
+function DailyChart({
+  days,
+  values,
+  target,
+  label,
+  unit,
+  targetLabel,
+  format,
+}: {
+  days: Day[];
+  values: (number | null)[];
+  target: number;
+  label: string;
+  unit: string;
+  targetLabel: string;
+  format: (v: number) => string;
+}) {
   const wrap = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   const [hover, setHover] = useState<number | null>(null);
@@ -172,8 +222,6 @@ function DailyChart({ days, nutrient, target }: { days: Day[]; nutrient: Nutrien
     return () => ro.disconnect();
   }, []);
 
-  const def = NUTRIENTS[nutrient];
-  const values = days.map((d) => (d.total ? d.total[nutrient] : null));
   const maxValue = Math.max(target, ...values.map((v) => v ?? 0));
   const step = niceStep(maxValue * 1.1);
   const yMax = Math.ceil((maxValue * 1.1) / step) * step || 1;
@@ -194,7 +242,7 @@ function DailyChart({ days, nutrient, target }: { days: Day[]; nutrient: Nutrien
   return (
     <div ref={wrap} className="relative w-full" onPointerLeave={() => setHover(null)}>
       {width > 0 && (
-        <svg width={width} height={H} role="img" aria-label={`${def.label}の日ごとの摂取量`}>
+        <svg width={width} height={H} role="img" aria-label={`${label}の日ごとの値`}>
           {/* 目盛り線（控えめな細線） */}
           {ticks.map((t) => (
             <g key={t}>
@@ -221,7 +269,7 @@ function DailyChart({ days, nutrient, target }: { days: Day[]; nutrient: Nutrien
             <g>
               <line x1={M.left} x2={width - M.right} y1={y(target)} y2={y(target)} stroke="var(--fg)" strokeWidth={1} opacity={0.6} />
               <text x={width - M.right} y={y(target) - 4} textAnchor="end" fontSize={10} fill="var(--muted)">
-                {def.kind === "max" ? "上限" : "目標"}
+                {targetLabel}
               </text>
             </g>
           )}
@@ -245,7 +293,7 @@ function DailyChart({ days, nutrient, target }: { days: Day[]; nutrient: Nutrien
               height={plotH}
               fill="transparent"
               tabIndex={0}
-              aria-label={`${d.date} ${values[i] === null ? "記録なし" : `${fmt(values[i]!, nutrient)}${def.unit}`}`}
+              aria-label={`${d.date} ${values[i] === null ? "記録なし" : `${format(values[i]!)}${unit}`}`}
               onPointerEnter={() => setHover(i)}
               onPointerDown={() => setHover(i)}
               onFocus={() => setHover(i)}
@@ -262,11 +310,11 @@ function DailyChart({ days, nutrient, target }: { days: Day[]; nutrient: Nutrien
           style={{ left: Math.min(Math.max(M.left + hover * band + band / 2, 60), width - 60) }}
         >
           <div className="text-sm font-semibold tabular-nums">
-            {hoveredValue === null ? "記録なし" : `${fmt(hoveredValue, nutrient)}${def.unit}`}
+            {hoveredValue === null ? "記録なし" : `${format(hoveredValue)}${unit}`}
           </div>
           <div className="text-muted">
             {Number(hovered.date.slice(5, 7))}月{Number(hovered.date.slice(8))}日
-            {hoveredValue !== null && target > 0 && `・${def.kind === "max" ? "上限" : "目標"}の${Math.round((hoveredValue / target) * 100)}%`}
+            {hoveredValue !== null && target > 0 && `・${targetLabel}の${Math.round((hoveredValue / target) * 100)}%`}
           </div>
         </div>
       )}
