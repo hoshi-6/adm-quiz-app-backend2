@@ -69,7 +69,8 @@ export async function POST(req: Request) {
       system: SYSTEM,
       user: buildPrompt(parsed.data),
       schema: SuggestionSchema,
-      effort: "medium",
+      // 3案を同時に作るので、考える量を抑えて速く・1分あたりの利用上限に当たりにくくする
+      effort: "low",
     });
     return Response.json(result);
   } catch (err) {

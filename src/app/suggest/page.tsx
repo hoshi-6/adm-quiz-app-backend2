@@ -3,11 +3,11 @@
 import { useLiveQuery } from "dexie-react-hooks";
 import { toast } from "@/lib/toast";
 import Link from "next/link";
-import { useEffect, useState, type FormEvent, type ReactNode } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Badge, Button, Card, ErrorNote, Field, NumberInput, PageHeader, Select, Spinner, Textarea } from "@/components/ui";
 import { SUGGEST_STYLES, type SuggestRequest, type Suggestion } from "@/lib/ai/schemas";
 import { MEAL_LABELS, addMeals, consumePantry, daysUntil, db, todayStr, type MealType, type PantryItem } from "@/lib/db";
-import { callApi, useDayIntake, useSettings } from "@/lib/hooks";
+import { ApiError, callApi, useDayIntake, useSettings } from "@/lib/hooks";
 import { IngredientDeduct, buildDeductRows, type DeductRow } from "@/components/IngredientDeduct";
 import { ConsultChat, type ChatMessage } from "@/components/ConsultChat";
 import { NutrientTable } from "@/components/NutrientBars";
@@ -16,7 +16,11 @@ import { NUTRIENT_KEYS, NUTRIENTS, completeNutrients, fmt } from "@/lib/nutrient
 const STORAGE_KEY = "gohan-navi:last-suggestion-v2";
 
 /** 1案ごとの状態。3案を同時に作り、できたものから表示する */
-type Slot = { state: "loading" } | { state: "done"; suggestion: Suggestion } | { state: "error"; message: string };
+type Slot = { state: "loading"; note?: string } | { state: "done"; suggestion: Suggestion } | { state: "error"; message: string };
+
+/** 1分あたりの利用上限・混雑のときは、少し待てば通るので自動でやり直す（待つ秒数） */
+const RETRY_WAIT_SEC = [20, 40];
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 export default function SuggestPage() {
   const settings = useSettings();
@@ -30,6 +34,9 @@ export default function SuggestPage() {
   const [selected, setSelected] = useState<number | null>(null);
   const [chats, setChats] = useState<Record<number, ChatMessage[]>>({});
   const loading = slots.some((s) => s.state === "loading");
+  // 「もう一度」で同じ条件のまま作り直せるよう、最後に送った条件を覚えておく
+  const lastRequest = useRef<Omit<SuggestRequest, "style"> | null>(null);
+  const generation = useRef(0);
 
   // 前回の提案を復元（タブを切り替えても消えないように）
   useEffect(() => {
@@ -97,25 +104,41 @@ export default function SuggestPage() {
     };
 
     setServings(opts.servings);
-    const next: Slot[] = SUGGEST_STYLES.map(() => ({ state: "loading" }));
-    setSlots(next);
+    setSlots(SUGGEST_STYLES.map(() => ({ state: "loading" })));
     setSelected(null);
     setChats({});
-
+    lastRequest.current = base;
+    const gen = ++generation.current;
     // 3案を同時に依頼し、届いたものから表示する（1案ずつ順番に作るより速い）
-    SUGGEST_STYLES.forEach((_, style) => {
-      callApi<Suggestion>("/api/suggest", { ...base, style })
-        .then((suggestion) => {
-          next[style] = { state: "done", suggestion };
-        })
-        .catch((err) => {
-          next[style] = { state: "error", message: (err as Error).message };
-        })
-        .finally(() => {
-          // ほかの案を相談で書き換えている途中でも消さないよう、届いた案だけを差し替える
-          setSlots((prev) => prev.map((p, j) => (j === style ? next[style] : p)));
-        });
-    });
+    SUGGEST_STYLES.forEach((_, style) => void runSlot(style, gen));
+  }
+
+  /** 1案を作る。利用上限などで断られたら、少し待って自動でやり直す */
+  async function runSlot(style: number, gen = generation.current) {
+    const base = lastRequest.current;
+    if (!base) return;
+    // 新しく提案を頼み直したあとに、古い結果で上書きしない
+    const set = (slot: Slot) => {
+      // ほかの案を相談で書き換えている途中でも消さないよう、この案だけを差し替える
+      if (gen === generation.current) setSlots((prev) => prev.map((p, j) => (j === style ? slot : p)));
+    };
+    set({ state: "loading" });
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const suggestion = await callApi<Suggestion>("/api/suggest", { ...base, style });
+        return set({ state: "done", suggestion });
+      } catch (err) {
+        const status = err instanceof ApiError ? err.status : 0;
+        const wait = RETRY_WAIT_SEC[attempt];
+        if ((status === 429 || status === 503) && wait !== undefined && gen === generation.current) {
+          set({ state: "loading", note: `AIの利用上限に達したため、${wait}秒待ってからやり直します…` });
+          await sleep(wait * 1000);
+          set({ state: "loading" });
+          continue;
+        }
+        return set({ state: "error", message: (err as Error).message });
+      }
+    }
   }
 
   const errors = slots.flatMap((s) => (s.state === "error" ? [s.message] : []));
@@ -224,13 +247,21 @@ export default function SuggestPage() {
             <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
               {slots.map((slot, i) =>
                 slot.state === "loading" ? (
-                  <Card key={i} className="flex min-h-48 flex-col items-center justify-center gap-2 text-sm text-muted">
+                  <Card key={i} className="flex min-h-48 flex-col items-center justify-center gap-2 text-center text-sm text-muted">
                     <Spinner />
                     {SUGGEST_STYLES[i]}の献立を考えています…
+                    {slot.note && <span className="text-xs text-warn">{slot.note}</span>}
                   </Card>
                 ) : slot.state === "error" ? (
                   <Card key={i} className="text-sm text-muted">
-                    {SUGGEST_STYLES[i]}の提案は作れませんでした（{slot.message}）
+                    <p className="break-words">
+                      {SUGGEST_STYLES[i]}の提案は作れませんでした（{slot.message}）
+                    </p>
+                    {lastRequest.current && (
+                      <Button variant="secondary" className="mt-3" onClick={() => void runSlot(i)}>
+                        もう一度
+                      </Button>
+                    )}
                   </Card>
                 ) : (
                   <SuggestionCard

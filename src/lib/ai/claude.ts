@@ -20,7 +20,8 @@ function getClient() {
   if (!process.env.ANTHROPIC_API_KEY && !process.env.ANTHROPIC_AUTH_TOKEN) {
     throw new HttpError("サーバーに ANTHROPIC_API_KEY が設定されていません（README を参照）", 503);
   }
-  client ??= new Anthropic();
+  // 1分あたりの利用上限（429）や混雑（529）のときは、SDK が retry-after に従って待ってから自動でやり直す
+  client ??= new Anthropic({ maxRetries: 4 });
   return client;
 }
 
@@ -66,20 +67,7 @@ export async function generateStructured<T extends z.ZodType>(opts: {
       else throw err;
     }
   } catch (err) {
-    if (err instanceof Anthropic.AuthenticationError) {
-      throw new HttpError("ANTHROPIC_API_KEY が正しく設定されていません", 500);
-    }
-    if (err instanceof Anthropic.RateLimitError) {
-      throw new HttpError("AI が混み合っています。少し待ってから再度お試しください", 429);
-    }
-    if (err instanceof Anthropic.APIConnectionError) {
-      throw new HttpError("AI サービスに接続できませんでした", 502);
-    }
-    if (err instanceof Anthropic.APIError) {
-      console.error("Claude API error", err.status, err.message);
-      throw new HttpError("AI の呼び出しに失敗しました", 502);
-    }
-    throw err;
+    toHttpError(err);
   }
 
   if (response.stop_reason === "refusal") {
@@ -91,13 +79,31 @@ export async function generateStructured<T extends z.ZodType>(opts: {
   return response.parsed_output as z.infer<T>;
 }
 
+/** Claude API のエラーを、原因がわかる日本語のメッセージに直す */
 function toHttpError(err: unknown): never {
   if (err instanceof Anthropic.AuthenticationError) throw new HttpError("ANTHROPIC_API_KEY が正しく設定されていません", 500);
-  if (err instanceof Anthropic.RateLimitError) throw new HttpError("AI が混み合っています。少し待ってから再度お試しください", 429);
-  if (err instanceof Anthropic.APIConnectionError) throw new HttpError("AI サービスに接続できませんでした", 502);
   if (err instanceof Anthropic.APIError) {
     console.error("Claude API error", err.status, err.message);
-    throw new HttpError("AI の呼び出しに失敗しました", 502);
+    // err.error は API が返したエラー本文（{ type, error: { type, message } }）
+    const body = err.error as { error?: { message?: string } } | undefined;
+    const detail = body?.error?.message ?? err.message ?? "";
+    if (/credit balance|billing/i.test(detail)) {
+      throw new HttpError("Anthropic のクレジット残高が足りません。console.anthropic.com の Billing でクレジットを追加してください", 402);
+    }
+    if (err instanceof Anthropic.RateLimitError) {
+      const wait = Number(err.headers?.get("retry-after"));
+      throw new HttpError(
+        `AI の1分あたりの利用上限に達しました。${Number.isFinite(wait) && wait > 0 ? `約${Math.ceil(wait)}秒` : "1分ほど"}待ってからもう一度お試しください`,
+        429,
+      );
+    }
+    if (err.status === 529 || err instanceof Anthropic.InternalServerError) {
+      throw new HttpError("AI のサーバーが混み合っています。少し待ってからもう一度お試しください", 503);
+    }
+    if (err instanceof Anthropic.APIConnectionTimeoutError) throw new HttpError("AI の応答に時間がかかりすぎました。もう一度お試しください", 504);
+    if (err instanceof Anthropic.APIConnectionError) throw new HttpError("AI サービスに接続できませんでした", 502);
+    // 原因を調べられるよう、API のエラー内容も短く添える
+    throw new HttpError(`AI の呼び出しに失敗しました（${err.status ?? "?"}: ${detail.slice(0, 120)}）`, 502);
   }
   throw err;
 }

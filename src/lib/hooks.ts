@@ -20,6 +20,16 @@ export function useDayIntake(date = todayStr()) {
 }
 
 /** 自前の API ルートを呼ぶ。エラー時はメッセージ付きで throw する */
+/** API のエラー。status で「待てば直るか」を判断できる */
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    public status: number,
+  ) {
+    super(message);
+  }
+}
+
 export async function callApi<T>(path: string, body: unknown): Promise<T> {
   const passcode = getPasscode();
   const res = await fetch(path, {
@@ -28,6 +38,14 @@ export async function callApi<T>(path: string, body: unknown): Promise<T> {
     body: JSON.stringify(body),
   });
   const data = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(data.error ?? `エラーが発生しました (${res.status})`);
+  if (!res.ok) {
+    const fallback =
+      res.status === 504
+        ? "処理に時間がかかりすぎて中断されました（タイムアウト）。もう一度お試しください"
+        : res.status === 413
+          ? "送るデータが大きすぎます"
+          : `エラーが発生しました (${res.status})`;
+    throw new ApiError(data.error ?? fallback, res.status);
+  }
   return data as T;
 }
