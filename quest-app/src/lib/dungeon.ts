@@ -1,6 +1,8 @@
 // ダンジョン（放置型RPG）のルール。主人公の強さは「肉体管理」の記録から決まる。
 import { toDateKey } from "./date";
 import { type GameState, itemDone } from "./game";
+import type { Sprite } from "./sprites";
+import { type Ally, alliesAt, chapterOf } from "./story";
 
 export type Slot = "weapon" | "armor" | "accessory";
 
@@ -38,6 +40,8 @@ export interface DungeonState {
   /** 次のフロアへ進まず、今のフロアで稼ぐ */
   farm: boolean;
   lastActive: number;
+  /** 語りを表示した章の数 */
+  storyChapter: number;
 }
 
 export const ENCOUNTERS_PER_FLOOR = 5;
@@ -56,6 +60,7 @@ export function newDungeon(): DungeonState {
     equipment: {},
     farm: false,
     lastActive: Date.now(),
+    storyChapter: 0,
   };
 }
 
@@ -91,6 +96,10 @@ export interface Hero {
   blessed: boolean;
   tired: boolean;
   bonuses: Bonus[];
+  /** 一緒に戦う仲間 */
+  allies: Ally[];
+  /** 受けるダメージの倍率（盾役がいると下がる） */
+  takenMul: number;
 }
 
 /** これまでのクエストで記録した合計（種目ごと） */
@@ -115,6 +124,7 @@ export function heroStats(g: GameState, today: string = toDateKey()): Hero {
   const squatPct = Math.floor((t.squat ?? 0) / 100);
   const runPct = Math.floor((t.run ?? 0) / 5);
 
+  const allies = alliesAt(dg.deepest);
   const rec = g.days[today];
   const blessed = !!rec?.cleared;
   const tired = !!rec && !rec.cleared && rec.items.some((i) => i.penalty && !itemDone(i));
@@ -153,33 +163,12 @@ export function heroStats(g: GameState, today: string = toDateKey()): Hero {
     blessed,
     tired,
     bonuses,
+    allies,
+    takenMul: allies.some((a) => a.id === "tank") ? 0.8 : 1,
   };
 }
 
 // ---- 敵 ----
-
-interface Theme {
-  name: string;
-  enemies: [string, string][];
-  boss: [string, string];
-}
-
-const THEMES: Theme[] = [
-  { name: "苔むした地下道", enemies: [["大ネズミ", "🐀"], ["洞窟コウモリ", "🦇"], ["毒キノコ", "🍄"]], boss: ["地下道の主", "🐊"] },
-  { name: "骨の回廊", enemies: [["骸骨兵", "💀"], ["さまよう霊", "👻"], ["墓守グモ", "🕷️"]], boss: ["骨の騎士団長", "☠️"] },
-  { name: "獣の森層", enemies: [["牙狼", "🐺"], ["大猪", "🐗"], ["毒蛇", "🐍"]], boss: ["森の王獣", "🦁"] },
-  { name: "灼熱の坑道", enemies: [["炎の精", "🔥"], ["溶岩トカゲ", "🦎"], ["石の番人", "🗿"]], boss: ["炎獄竜", "🐲"] },
-  { name: "氷結の深層", enemies: [["氷の精", "❄️"], ["白い大熊", "🐻‍❄️"], ["凍てつく魔眼", "👁️"]], boss: ["氷晶の巨像", "🧊"] },
-  { name: "魔界の門", enemies: [["小悪魔", "😈"], ["双頭の魔犬", "🐕"], ["呪いの人形", "🪆"]], boss: ["門の魔王", "👹"] },
-  { name: "星の深淵", enemies: [["虚空の触手", "🦑"], ["星喰い", "🌑"], ["影の分身", "👤"]], boss: ["深淵の主", "🐉"] },
-];
-
-export function themeOf(floor: number): { name: string; cycle: number; theme: Theme } {
-  const band = Math.floor((floor - 1) / 10);
-  const theme = THEMES[band % THEMES.length];
-  const cycle = Math.floor(band / THEMES.length);
-  return { name: cycle > 0 ? `${theme.name} 第${cycle + 1}層` : theme.name, cycle, theme };
-}
 
 export function isBossFloor(floor: number) {
   return floor % 10 === 0;
@@ -191,7 +180,7 @@ export function checkpointOf(floor: number) {
 
 export interface Enemy {
   name: string;
-  icon: string;
+  sprite: Sprite;
   maxHp: number;
   atk: number;
   def: number;
@@ -201,14 +190,17 @@ export interface Enemy {
 }
 
 export function makeEnemy(floor: number, stage: number, rand: () => number = Math.random): Enemy {
-  const { theme } = themeOf(floor);
+  const { chapter } = chapterOf(floor);
   const boss = isBossFloor(floor) && stage === ENCOUNTERS_PER_FLOOR - 1;
-  const [name, icon] = boss ? theme.boss : theme.enemies[Math.floor(rand() * theme.enemies.length)];
+  // 章の中でも、階が深いほど後ろの敵が出やすい
+  const pos = ((floor - 1) % 10) / 10;
+  const idx = Math.min(chapter.enemies.length - 1, Math.floor((rand() * 0.7 + pos * 0.5) * chapter.enemies.length));
+  const f = boss ? chapter.boss : chapter.enemies[idx];
   const g = Math.pow(1.12, floor - 1);
   const ga = Math.pow(1.1, floor - 1);
   return {
-    name,
-    icon,
+    name: f.name,
+    sprite: f.sprite,
     maxHp: Math.round(30 * g * (boss ? 8 : 1)),
     atk: Math.round(6 * ga * (boss ? 1.8 : 1)),
     def: Math.round(1 * ga * 10) / 10,
@@ -303,9 +295,11 @@ export function upgradeCost(level: number) {
 export function killTime(hero: Hero, floor: number): number | null {
   const e = makeEnemy(floor, 0, () => 0.5);
   const avgCrit = 1 + hero.crit * (hero.critMul - 1);
-  const dmg = damage(hero.atk, e.def, () => 0.5) * avgCrit;
+  const allyDps = hero.allies.reduce((a, x) => a + (x.id === "mage" ? (hero.atk * 0.8) / 3000 : x.id === "wolf" ? (hero.atk * 0.35) / 1000 : 0), 0);
+  const dmg = damage(hero.atk, e.def, () => 0.5) * avgCrit + allyDps * hero.interval;
   const t = Math.ceil(e.maxHp / dmg) * hero.interval;
-  const taken = (t / e.interval) * damage(e.atk, hero.def, () => 0.5) * (1 - hero.dodge);
+  const heal = hero.allies.some((a) => a.id === "healer") ? (t / 4000) * hero.maxHp * 0.08 : 0;
+  const taken = (t / e.interval) * damage(e.atk, hero.def, () => 0.5) * (1 - hero.dodge) * hero.takenMul - heal;
   return taken < hero.maxHp ? t : null;
 }
 

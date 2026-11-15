@@ -9,6 +9,8 @@ const HEAD: Record<string, string> = {
   title: "TITLE",
   penalty: "WARNING",
   info: "NOTICE",
+  story: "STORY",
+  ally: "NEW ALLY",
 };
 
 /** システムからのお知らせを 1 つずつ表示する */

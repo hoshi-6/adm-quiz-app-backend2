@@ -13,6 +13,7 @@ import {
   sellPrice,
   upgradeCost,
 } from "./dungeon";
+import { ALLIES, CHAPTERS, chapterLabel, chapterOf } from "./story";
 import {
   type BodyEntry,
   type Exercise,
@@ -39,7 +40,7 @@ const listeners = new Set<() => void>();
 
 export interface Notice {
   id: number;
-  kind: "clear" | "levelup" | "title" | "penalty" | "info";
+  kind: "clear" | "levelup" | "title" | "penalty" | "info" | "story" | "ally";
   title: string;
   lines: string[];
 }
@@ -311,12 +312,39 @@ export function dungeonKill(gold: number, item: Item | null): LootResult {
       d.stage = 0;
       if (!d.farm) {
         d.floor++;
-        d.deepest = Math.max(d.deepest, d.floor);
+        if (d.floor > d.deepest) {
+          d.deepest = d.floor;
+          storyEvents(d.floor);
+        }
       }
     }
     d.lastActive = Date.now();
   });
   return loot;
+}
+
+/** 新しい階に初めて着いたときの物語（ボス撃破の語り・次の章・仲間の加入） */
+function storyEvents(floor: number) {
+  if ((floor - 1) % 10 === 0) {
+    const prev = chapterOf(floor - 1).chapter;
+    pushNotice({ kind: "story", title: `${prev.rank}級「${prev.title}」踏破`, lines: prev.outro });
+    const next = chapterOf(floor).chapter;
+    pushNotice({ kind: "story", title: chapterLabel(floor), lines: next.intro });
+  }
+  const ally = ALLIES.find((a) => a.joinFloor === floor);
+  if (ally) {
+    pushNotice({ kind: "ally", title: `${ally.name}が仲間になった！`, lines: [`【${ally.role}】${ally.desc}`] });
+  }
+}
+
+/** ダンジョンに初めて入ったときの語り */
+export function showOpening() {
+  const d = ensure().dungeon;
+  if (d.storyChapter > 0) return;
+  pushNotice({ kind: "story", title: chapterLabel(1), lines: CHAPTERS[0].intro });
+  mutate((s) => {
+    s.dungeon.storyChapter = 1;
+  });
 }
 
 /** 倒された。チェックポイント（1・11・21…階）まで戻される */

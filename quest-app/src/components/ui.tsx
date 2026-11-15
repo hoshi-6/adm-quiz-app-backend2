@@ -18,13 +18,13 @@ export function Window({
   right?: ReactNode;
 }) {
   return (
-    <section className={cx("sys-window rounded-md p-4", danger && "danger", className)}>
+    <section className={cx("sys-window p-4", danger && "danger", className)}>
       {title && (
         <header className="mb-3 flex items-center justify-between gap-2">
           <h2
             className={cx(
-              "border px-3 py-0.5 text-sm font-bold tracking-[0.2em]",
-              danger ? "border-danger/70 text-danger" : "border-glow/60 text-glow-strong glow-text",
+              "px-2 py-0.5 text-sm tracking-[0.15em]",
+              danger ? "bg-danger/20 text-danger" : "bg-glow/15 text-glow-strong glow-text",
             )}
           >
             {title}
@@ -46,10 +46,10 @@ export function Button({
     <button
       {...props}
       className={cx(
-        "rounded border px-3 py-2 text-sm font-semibold transition active:scale-95 disabled:opacity-40 disabled:active:scale-100",
-        variant === "primary" && "border-glow/70 bg-glow/15 text-glow-strong hover:bg-glow/25",
-        variant === "ghost" && "border-line bg-transparent text-muted hover:border-glow/50 hover:text-fg",
-        variant === "danger" && "border-danger/60 bg-danger/10 text-danger hover:bg-danger/20",
+        "pixel-btn px-3 py-2 text-sm disabled:opacity-40",
+        variant === "primary" && "bg-glow/20 text-glow-strong hover:bg-glow/30",
+        variant === "ghost" && "bg-bg/40 text-muted hover:text-fg",
+        variant === "danger" && "bg-danger/15 text-danger hover:bg-danger/25",
         className,
       )}
     />
@@ -59,8 +59,8 @@ export function Button({
 export function Bar({ value, ok, className }: { value: number; ok?: boolean; className?: string }) {
   const pct = Math.max(0, Math.min(1, value)) * 100;
   return (
-    <div className={cx("h-2 overflow-hidden rounded-full bg-subtle", className)}>
-      <div className={cx("bar-fill h-full rounded-full transition-[width] duration-500", ok && "ok")} style={{ width: `${pct}%` }} />
+    <div className={cx("h-3 overflow-hidden border-2 border-black bg-subtle", className)}>
+      <div className={cx("bar-fill h-full transition-[width] duration-300", ok && "ok")} style={{ width: `${pct}%` }} />
     </div>
   );
 }

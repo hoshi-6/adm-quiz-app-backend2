@@ -28,8 +28,8 @@
   --color-ok: var(--ok);
   --color-gold: var(--gold);
   --color-danger: var(--danger);
-  --font-sans: "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", system-ui, sans-serif;
-  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, monospace;
+  --font-sans: var(--font-dot), "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif;
+  --font-mono: var(--font-dot), ui-monospace, Menlo, monospace;
 }
 
 html,
@@ -39,56 +39,116 @@ body {
   -webkit-tap-highlight-color: transparent;
 }
 
+/* ---- ドット基調：角丸なし・太字の合成なし・段々の枠 ---- */
+*,
+*::before,
+*::after {
+  border-radius: 0 !important;
+}
+
 body {
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
   background-image:
-    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(69, 184, 255, 0.18), transparent 70%),
-    linear-gradient(rgba(69, 184, 255, 0.035) 1px, transparent 1px),
-    linear-gradient(90deg, rgba(69, 184, 255, 0.035) 1px, transparent 1px);
-  background-size: 100% 100%, 32px 32px, 32px 32px;
+    linear-gradient(rgba(69, 184, 255, 0.04) 2px, transparent 2px),
+    linear-gradient(90deg, rgba(69, 184, 255, 0.04) 2px, transparent 2px);
+  background-size: 32px 32px;
   background-attachment: fixed;
 }
 
-.sys-window {
+/* 角が欠けた、昔のゲーム機のようなウィンドウ枠 */
+.sys-window,
+.pixel-frame {
   position: relative;
-  background: linear-gradient(180deg, rgba(18, 36, 66, 0.92), rgba(9, 18, 34, 0.94));
-  border: 1px solid rgba(69, 184, 255, 0.55);
+  background: #0b1630;
   box-shadow:
-    0 0 0 1px rgba(69, 184, 255, 0.08),
-    0 0 18px rgba(69, 184, 255, 0.22),
-    inset 0 0 24px rgba(69, 184, 255, 0.08);
+    -4px 0 0 0 var(--glow),
+    4px 0 0 0 var(--glow),
+    0 -4px 0 0 var(--glow),
+    0 4px 0 0 var(--glow),
+    inset 0 0 0 4px #0a0e18,
+    inset 4px 4px 0 4px rgba(143, 214, 255, 0.12);
 }
-.sys-window::before,
-.sys-window::after {
-  content: "";
-  position: absolute;
-  width: 14px;
-  height: 14px;
-  border-color: var(--glow-strong);
-  pointer-events: none;
-}
-.sys-window::before {
-  top: -1px;
-  left: -1px;
-  border-top: 2px solid;
-  border-left: 2px solid;
-}
-.sys-window::after {
-  bottom: -1px;
-  right: -1px;
-  border-bottom: 2px solid;
-  border-right: 2px solid;
+.pixel-frame {
+  box-shadow:
+    -4px 0 0 0 var(--glow),
+    4px 0 0 0 var(--glow),
+    0 -4px 0 0 var(--glow),
+    0 4px 0 0 var(--glow);
 }
 .sys-window.danger {
-  border-color: rgba(255, 93, 108, 0.65);
-  box-shadow: 0 0 18px rgba(255, 93, 108, 0.25), inset 0 0 24px rgba(255, 93, 108, 0.08);
+  box-shadow:
+    -4px 0 0 0 var(--danger),
+    4px 0 0 0 var(--danger),
+    0 -4px 0 0 var(--danger),
+    0 4px 0 0 var(--danger),
+    inset 0 0 0 4px #0a0e18;
 }
-.sys-window.danger::before,
-.sys-window.danger::after {
-  border-color: #ff9aa4;
+.sys-window.border-ok\/60 {
+  box-shadow:
+    -4px 0 0 0 var(--ok),
+    4px 0 0 0 var(--ok),
+    0 -4px 0 0 var(--ok),
+    0 4px 0 0 var(--ok),
+    inset 0 0 0 4px #0a0e18;
+}
+
+.pixel-box {
+  background: rgba(10, 14, 24, 0.6);
+  box-shadow:
+    -2px 0 0 0 var(--line),
+    2px 0 0 0 var(--line),
+    0 -2px 0 0 var(--line),
+    0 2px 0 0 var(--line);
+}
+
+.pixel-btn {
+  border-width: 0 !important;
+  box-shadow:
+    -2px 0 0 0 currentColor,
+    2px 0 0 0 currentColor,
+    0 -2px 0 0 currentColor,
+    0 2px 0 0 currentColor,
+    inset -3px -3px 0 0 rgba(0, 0, 0, 0.35),
+    inset 3px 3px 0 0 rgba(255, 255, 255, 0.12);
+}
+.pixel-btn:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow:
+    -2px 0 0 0 currentColor,
+    2px 0 0 0 currentColor,
+    0 -2px 0 0 currentColor,
+    0 2px 0 0 currentColor,
+    inset 3px 3px 0 0 rgba(0, 0, 0, 0.35);
+}
+
+input,
+select {
+  box-shadow: inset 2px 2px 0 rgba(0, 0, 0, 0.5);
 }
 
 .glow-text {
-  text-shadow: 0 0 10px rgba(69, 184, 255, 0.75);
+  text-shadow: 2px 2px 0 #000, 0 0 8px rgba(69, 184, 255, 0.5);
+}
+
+/* ゲージを区切りのあるドット風にする */
+.bar-fill,
+.pixel-segments {
+  -webkit-mask: repeating-linear-gradient(90deg, #000 0 6px, transparent 6px 8px);
+  mask: repeating-linear-gradient(90deg, #000 0 6px, transparent 6px 8px);
+}
+
+.blessed {
+  filter: drop-shadow(0 0 0 #8fd6ff) drop-shadow(2px 0 0 #45b8ff) drop-shadow(-2px 0 0 #45b8ff);
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+.blink {
+  animation: blink 1s steps(1) infinite;
 }
 
 @keyframes sys-in {
@@ -99,7 +159,7 @@ body {
   }
 }
 .animate-sys-in {
-  animation: sys-in 0.35s ease-out;
+  animation: sys-in 0.3s steps(4);
 }
 
 @keyframes bar-shine {
@@ -131,13 +191,14 @@ body {
   }
 }
 .dmg-float {
-  animation: dmg-float 0.9s ease-out forwards;
-  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.9);
+  animation: dmg-float 0.9s steps(8) forwards;
+  text-shadow: 2px 2px 0 #000;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .animate-sys-in,
-  .bar-fill {
+  .bar-fill,
+  .blink {
     animation: none;
   }
 }
