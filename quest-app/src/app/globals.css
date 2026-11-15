@@ -120,6 +120,21 @@ body {
   background-size: 200% 100%;
 }
 
+@keyframes dmg-float {
+  from {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1.15);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -48px) scale(1);
+  }
+}
+.dmg-float {
+  animation: dmg-float 0.9s ease-out forwards;
+  text-shadow: 0 2px 4px rgba(0, 0, 0, 0.9);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .animate-sys-in,
   .bar-fill {

@@ -1,5 +1,6 @@
 // ゲームのルール（純粋な関数だけ。保存は store.ts）
 import { addDays, diffDays, toDateKey, weekday } from "./date";
+import { type DungeonState, newDungeon } from "./dungeon";
 
 export type Unit = "回" | "km" | "秒" | "分";
 
@@ -78,6 +79,8 @@ export interface GameState {
   lastProcessed: string;
   titles: string[];
   equippedTitle?: string;
+  /** ダンジョン（ゲーム）の進み具合 */
+  dungeon: DungeonState;
 }
 
 export const DEFAULT_EXERCISES: Exercise[] = [
@@ -104,6 +107,7 @@ export function newGame(today: string = toDateKey()): GameState {
     penaltyPending: false,
     lastProcessed: today,
     titles: [],
+    dungeon: newDungeon(),
   };
 }
 

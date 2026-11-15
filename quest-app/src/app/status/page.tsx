@@ -56,7 +56,7 @@ export default function StatusPage() {
             </li>
           ))}
         </ul>
-        <p className="mt-2 text-xs text-muted">レベルが 1 上がるごとに 3 ポイントもらえます。好きな能力値に振り分けましょう。</p>
+        <p className="mt-2 text-xs text-muted">レベルが 1 上がるごとに 3 ポイントもらえます。能力値はダンジョンの主人公の強さになります（STR→攻撃、VIT→HP・防御、AGI→攻撃速度・回避、SEN→会心、INT→スキル）。</p>
       </Window>
 
       <Window title="クエストの目標">

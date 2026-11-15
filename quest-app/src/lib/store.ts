@@ -3,6 +3,17 @@
 import { useSyncExternalStore } from "react";
 import { toDateKey } from "./date";
 import {
+  type Item,
+  type Slot,
+  type UpgradeKey,
+  checkpointOf,
+  idleReward,
+  itemScore,
+  newDungeon,
+  sellPrice,
+  upgradeCost,
+} from "./dungeon";
+import {
   type BodyEntry,
   type Exercise,
   type GameState,
@@ -67,12 +78,17 @@ function load(): GameState {
     const raw = localStorage.getItem(KEY);
     if (raw) {
       const parsed = JSON.parse(raw) as GameState;
-      if (parsed && parsed.version === 1) return { ...newGame(), ...parsed };
+      if (parsed && parsed.version === 1) return normalize(parsed);
     }
   } catch {
     // 読めないときは新しく始める
   }
   return newGame();
+}
+
+/** 古い保存データに、あとから増えた項目を補う */
+function normalize(parsed: GameState): GameState {
+  return { ...newGame(), ...parsed, dungeon: { ...newDungeon(), ...parsed.dungeon } };
 }
 
 function save() {
@@ -181,7 +197,11 @@ export function recordProgress(exerciseId: string, opts: { delta?: number; value
       pushNotice({
         kind: "clear",
         title: "デイリークエスト クリア",
-        lines: [`報酬：経験値 +${xp}`, streakBefore > 0 ? `連続クリアボーナス（${streak}日目）` : "明日も継続すると経験値ボーナス"],
+        lines: [
+          `報酬：経験値 +${xp}`,
+          streakBefore > 0 ? `連続クリアボーナス（${streak}日目）` : "明日も継続すると経験値ボーナス",
+          "ダンジョン：今日は「鍛錬の加護」（攻撃・HP +15%、ゴールド +30%）",
+        ],
       });
       if (ups > 0) {
         pushNotice({
@@ -247,7 +267,7 @@ export function importData(json: string) {
   if (!parsed || parsed.version !== 1 || typeof parsed.level !== "number" || !parsed.days) {
     throw new Error("このアプリのバックアップではありません");
   }
-  state = { ...newGame(), ...parsed };
+  state = normalize(parsed);
   runRollover(false);
   save();
   emit();
@@ -258,4 +278,121 @@ export function resetAll() {
   runRollover(false);
   save();
   emit();
+}
+
+// ---- ダンジョン ----
+
+export type LootResult = { item: Item; equipped: boolean; sold: number } | null;
+
+/** 敵を倒した。advance=true ならそのフロアの次の敵へ進む */
+export function dungeonKill(gold: number, item: Item | null): LootResult {
+  let loot: LootResult = null;
+  mutate((s) => {
+    const d = s.dungeon;
+    d.gold += gold;
+    d.totalGold += gold;
+    d.kills++;
+    if (d.stage === 4 && d.floor % 10 === 0) d.bossKills++;
+    if (item) {
+      const cur = d.equipment[item.slot];
+      if (!cur || itemScore(item) > itemScore(cur)) {
+        const sold = cur ? sellPrice(cur) : 0;
+        d.equipment[item.slot] = item;
+        d.gold += sold;
+        loot = { item, equipped: true, sold };
+      } else {
+        const sold = sellPrice(item);
+        d.gold += sold;
+        loot = { item, equipped: false, sold };
+      }
+    }
+    d.stage++;
+    if (d.stage >= 5) {
+      d.stage = 0;
+      if (!d.farm) {
+        d.floor++;
+        d.deepest = Math.max(d.deepest, d.floor);
+      }
+    }
+    d.lastActive = Date.now();
+  });
+  return loot;
+}
+
+/** 倒された。チェックポイント（1・11・21…階）まで戻される */
+export function dungeonDeath() {
+  mutate((s) => {
+    const d = s.dungeon;
+    d.deaths++;
+    d.floor = checkpointOf(d.floor);
+    d.stage = 0;
+    d.lastActive = Date.now();
+  });
+}
+
+export function warpTo(floor: number) {
+  mutate((s) => {
+    const d = s.dungeon;
+    d.floor = Math.max(1, Math.min(checkpointOf(d.deepest), checkpointOf(floor)));
+    d.stage = 0;
+  });
+}
+
+export function setFarm(on: boolean) {
+  mutate((s) => {
+    s.dungeon.farm = on;
+  });
+}
+
+export function buyUpgrade(key: UpgradeKey) {
+  mutate((s) => {
+    const d = s.dungeon;
+    const cost = upgradeCost(d.upgrades[key]);
+    if (d.gold < cost) return;
+    d.gold -= cost;
+    d.upgrades[key]++;
+  });
+}
+
+export function unequip(slot: Slot) {
+  mutate((s) => {
+    const it = s.dungeon.equipment[slot];
+    if (!it) return;
+    s.dungeon.gold += sellPrice(it);
+    delete s.dungeon.equipment[slot];
+  });
+}
+
+/** ダンジョンを離れていた間の報酬を受け取る（3分以上離れていたとき） */
+export function claimIdle() {
+  const s0 = ensure();
+  const away = Date.now() - s0.dungeon.lastActive;
+  if (s0.dungeon.kills === 0 || away < 3 * 60 * 1000) {
+    touchDungeon();
+    return;
+  }
+  const r = idleReward(s0, away);
+  mutate((s) => {
+    s.dungeon.lastActive = Date.now();
+    if (!r) return;
+    s.dungeon.gold += r.gold;
+    s.dungeon.totalGold += r.gold;
+    s.dungeon.kills += r.kills;
+  });
+  if (r) {
+    const h = Math.floor(Math.min(away, 12 * 3600000) / 3600000);
+    const m = Math.floor((Math.min(away, 12 * 3600000) % 3600000) / 60000);
+    pushNotice({
+      kind: "info",
+      title: "放置報酬",
+      lines: [`留守のあいだ（${h ? `${h}時間` : ""}${m}分）も主人公は戦い続けました。`, `${r.floor}階で ${r.kills}体 討伐`, `ゴールド +${r.gold.toLocaleString()}`],
+    });
+  }
+}
+
+/** ダンジョンにいる時刻を記録する（放置報酬の計算用。保存はするが画面は更新しない） */
+export function touchDungeon() {
+  const s = ensure();
+  state = { ...s, dungeon: { ...s.dungeon, lastActive: Date.now() } };
+  save();
 }

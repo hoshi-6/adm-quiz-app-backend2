@@ -10,6 +10,7 @@ import { cx } from "./ui";
 
 const NAV = [
   { href: "/", label: "クエスト", icon: "M9 4h6l1 3h4v13H4V7h4zM9 12l2 2 4-4" },
+  { href: "/dungeon", label: "ダンジョン", icon: "M4 21V10l8-6 8 6v11M9 21v-6h6v6M12 4v3" },
   { href: "/status", label: "ステータス", icon: "M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21c0-4 4-6 8-6s8 2 8 6" },
   { href: "/body", label: "からだ", icon: "M4 20h16M7 20V10M12 20V4M17 20v-7" },
   { href: "/log", label: "記録", icon: "M4 5h16v15H4zM4 10h16M9 3v4M15 3v4" },
@@ -30,6 +31,9 @@ export function Shell({ children }: { children: ReactNode }) {
 
   // 0時をまたいだときや、アプリに戻ってきたときに日付を確かめる
   useEffect(() => {
+    if ("serviceWorker" in navigator && process.env.NODE_ENV === "production") {
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    }
     const onVisible = () => document.visibilityState === "visible" && checkDate();
     document.addEventListener("visibilitychange", onVisible);
     const t = setInterval(checkDate, 30_000);
@@ -84,12 +88,12 @@ export function Shell({ children }: { children: ReactNode }) {
         </main>
       </div>
 
-      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-5 border-t border-line bg-bg/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
+      <nav className="fixed inset-x-0 bottom-0 z-30 grid grid-cols-6 border-t border-line bg-bg/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden">
         {NAV.map((n) => (
           <Link
             key={n.href}
             href={n.href}
-            className={cx("flex flex-col items-center gap-0.5 py-2 text-[11px]", isActive(n.href) ? "text-glow-strong" : "text-muted")}
+            className={cx("flex min-w-0 flex-col items-center gap-0.5 py-2 text-[10px]", isActive(n.href) ? "text-glow-strong" : "text-muted")}
           >
             <Icon d={n.icon} />
             {n.label}
