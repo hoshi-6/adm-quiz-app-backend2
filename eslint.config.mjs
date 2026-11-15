@@ -18,6 +18,8 @@ const eslintConfig = defineConfig([
     "out/**",
     "build/**",
     "next-env.d.ts",
+    // 別アプリ（それぞれのフォルダで lint する）
+    "quest-app/**",
   ]),
 ]);
 

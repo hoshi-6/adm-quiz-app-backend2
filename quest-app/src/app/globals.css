@@ -1,0 +1,128 @@
+@import "tailwindcss";
+
+/* システムウィンドウ風の配色（暗い背景に青く光る枠）。この見た目は暗色のみ */
+:root {
+  --bg: #060a13;
+  --surface: #0b1424;
+  --subtle: #12203a;
+  --line: #1e3a5f;
+  --fg: #e4efff;
+  --muted: #8ba3c2;
+  --glow: #45b8ff;
+  --glow-strong: #8fd6ff;
+  --ok: #5cf2b0;
+  --gold: #ffd35c;
+  --danger: #ff5d6c;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-subtle: var(--subtle);
+  --color-line: var(--line);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-glow: var(--glow);
+  --color-glow-strong: var(--glow-strong);
+  --color-ok: var(--ok);
+  --color-gold: var(--gold);
+  --color-danger: var(--danger);
+  --font-sans: "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", system-ui, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, monospace;
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--fg);
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  background-image:
+    radial-gradient(ellipse 80% 50% at 50% -10%, rgba(69, 184, 255, 0.18), transparent 70%),
+    linear-gradient(rgba(69, 184, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(69, 184, 255, 0.035) 1px, transparent 1px);
+  background-size: 100% 100%, 32px 32px, 32px 32px;
+  background-attachment: fixed;
+}
+
+.sys-window {
+  position: relative;
+  background: linear-gradient(180deg, rgba(18, 36, 66, 0.92), rgba(9, 18, 34, 0.94));
+  border: 1px solid rgba(69, 184, 255, 0.55);
+  box-shadow:
+    0 0 0 1px rgba(69, 184, 255, 0.08),
+    0 0 18px rgba(69, 184, 255, 0.22),
+    inset 0 0 24px rgba(69, 184, 255, 0.08);
+}
+.sys-window::before,
+.sys-window::after {
+  content: "";
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  border-color: var(--glow-strong);
+  pointer-events: none;
+}
+.sys-window::before {
+  top: -1px;
+  left: -1px;
+  border-top: 2px solid;
+  border-left: 2px solid;
+}
+.sys-window::after {
+  bottom: -1px;
+  right: -1px;
+  border-bottom: 2px solid;
+  border-right: 2px solid;
+}
+.sys-window.danger {
+  border-color: rgba(255, 93, 108, 0.65);
+  box-shadow: 0 0 18px rgba(255, 93, 108, 0.25), inset 0 0 24px rgba(255, 93, 108, 0.08);
+}
+.sys-window.danger::before,
+.sys-window.danger::after {
+  border-color: #ff9aa4;
+}
+
+.glow-text {
+  text-shadow: 0 0 10px rgba(69, 184, 255, 0.75);
+}
+
+@keyframes sys-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+    filter: brightness(2);
+  }
+}
+.animate-sys-in {
+  animation: sys-in 0.35s ease-out;
+}
+
+@keyframes bar-shine {
+  from {
+    background-position: -200% 0;
+  }
+  to {
+    background-position: 200% 0;
+  }
+}
+.bar-fill {
+  background: linear-gradient(90deg, #2b8fd6, #6fd0ff, #2b8fd6);
+  background-size: 200% 100%;
+  animation: bar-shine 3s linear infinite;
+}
+.bar-fill.ok {
+  background: linear-gradient(90deg, #2fbf86, #8affd0, #2fbf86);
+  background-size: 200% 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-sys-in,
+  .bar-fill {
+    animation: none;
+  }
+}
