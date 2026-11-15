@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { PixelSprite } from "@/components/PixelSprite";
 import { Bar, Button, Window, cx } from "@/components/ui";
-import { DEFAULT_AVATAR, buildAvatar } from "@/lib/avatar";
+import { heroLook } from "@/lib/avatar";
 import { STATS, TITLE_DEFS, rankOf, targetFor, titleName, xpToNext } from "@/lib/game";
 import { allocateStat, equipTitle, useGame } from "@/lib/store";
 
@@ -17,7 +17,7 @@ export default function StatusPage() {
       <Window title="STATUS">
         <div className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-1">
           <Link href="/character" className="pixel-box relative row-span-3 grid h-24 w-20 place-items-center" title="主人公の見た目を変える">
-            <PixelSprite sprite={buildAvatar(game.avatar ?? DEFAULT_AVATAR)} scale={1.5} />
+            <PixelSprite sprite={heroLook(game.avatar).idle[0]} scale={heroLook(game.avatar).scale * 0.75} />
             <span className="absolute -right-2 -top-2 border-2 bg-bg px-1 font-mono text-sm" style={{ color: rank.color, borderColor: rank.color }}>
               {rank.rank}
             </span>

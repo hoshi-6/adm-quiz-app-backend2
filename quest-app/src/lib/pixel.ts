@@ -38,6 +38,14 @@ const cache = new WeakMap<Sprite, Bitmap>();
 export function refine(sprite: Sprite): Bitmap {
   const hit = cache.get(sprite);
   if (hit) return hit;
+  if (sprite.hd) {
+    const h = sprite.rows.length;
+    const w = Math.max(...sprite.rows.map((r) => r.length));
+    const px = sprite.rows.flatMap((r) => Array.from({ length: w }, (_, x) => sprite.palette[r[x]] ?? null));
+    const bmp = { w, h, px };
+    cache.set(sprite, bmp);
+    return bmp;
+  }
   const rows = scale2x(sprite.rows);
   const h = rows.length;
   const w = rows[0].length;

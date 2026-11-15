@@ -4,6 +4,8 @@ export type Palette = Record<string, string>;
 export interface Sprite {
   rows: string[];
   palette: Palette;
+  /** 最初から細かく描いた絵（64×64 など）。2倍にする処理と自動の陰影をしない */
+  hd?: boolean;
 }
 
 const K = "#0a0e18"; // 輪郭

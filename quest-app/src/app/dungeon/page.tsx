@@ -21,7 +21,7 @@ import {
   upgradeCost,
 } from "@/lib/dungeon";
 import { PixelSprite } from "@/components/PixelSprite";
-import { DEFAULT_AVATAR, buildAvatar } from "@/lib/avatar";
+import { heroLook } from "@/lib/avatar";
 import { SCENE_H, SCENE_W, sceneFor } from "@/lib/scenes";
 import { type AllyId, ALLIES, chapterLabel, chapterOf } from "@/lib/story";
 import type { GameState } from "@/lib/game";
@@ -137,7 +137,9 @@ function Dungeon({ game }: { game: GameState }) {
 
   const now = r.now;
   const { chapter } = chapterOf(d.floor);
-  const heroSprite = useMemo(() => buildAvatar(game.avatar ?? DEFAULT_AVATAR), [game.avatar]);
+  const look = heroLook(game.avatar);
+  const heroAttacking = r.phase === "fight" && r.heroCd > hero.interval - 220;
+  const heroSprite = heroAttacking ? look.attack : look.idle[Math.floor(now / 600) % 2];
   const checkpoints = Array.from({ length: Math.floor((checkpointOf(d.deepest) - 1) / 10) + 1 }, (_, i) => i * 10 + 1);
 
   return (
@@ -185,10 +187,10 @@ function Dungeon({ game }: { game: GameState }) {
                   <span className="mt-0.5 text-[9px] text-fg/70">{a.name}</span>
                 </div>
               ))}
-            <div className="flex w-16 flex-col items-center">
+            <div className="flex w-24 flex-col items-center">
               <HpBar value={r.heroHp / hero.maxHp} label={`${Math.max(0, Math.ceil(r.heroHp))}`} />
               <div className={cx("mt-1 transition-transform", now - r.heroHit < 150 && "-translate-x-1", r.phase === "fight" && r.heroCd > hero.interval - 150 && "translate-x-2", r.phase === "dead" && "rotate-90 opacity-40")}>
-                <PixelSprite sprite={heroSprite} scale={2} className={hero.blessed ? "blessed" : undefined} />
+                <PixelSprite sprite={heroSprite} scale={look.scale} className={hero.blessed ? "blessed" : undefined} />
               </div>
               <p className="mt-0.5 max-w-full truncate text-[10px] text-fg/90">{game.playerName}</p>
             </div>

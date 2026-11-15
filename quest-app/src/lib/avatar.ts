@@ -1,4 +1,5 @@
 // 主人公の見た目（髪型・色・服・武器）を組み合わせてドット絵を作る。16×24 ドット。
+import { WANDERER } from "./heroSprite";
 import type { Sprite } from "./sprites";
 
 export const HAIR_STYLES = {
@@ -60,6 +61,8 @@ export const WEAPONS = { sword: "長剣", dagger: "短剣", axe: "斧", staff: "
 export type Weapon = keyof typeof WEAPONS;
 
 export interface Avatar {
+  /** "wanderer" = オリジナル主人公「灰の放浪者」（64×64 の描きおろし）。なし = 部品で組み立てた姿 */
+  preset?: "wanderer";
   hairStyle: HairStyle;
   hairColor: keyof typeof HAIR_COLORS;
   skinColor: keyof typeof SKIN_COLORS;
@@ -72,6 +75,7 @@ export interface Avatar {
 }
 
 export const DEFAULT_AVATAR: Avatar = {
+  preset: "wanderer",
   hairStyle: "short",
   hairColor: "black",
   skinColor: "light",
@@ -385,4 +389,27 @@ export function buildAvatar(a: Avatar): Sprite {
       Q: "#e0b0ff",
     },
   };
+}
+
+export interface HeroLook {
+  idle: [Sprite, Sprite];
+  attack: Sprite;
+  /** 表示倍率（描きおろしは 64×64 を 1.5 倍、部品の姿は 32×48 を 2 倍） */
+  scale: number;
+}
+
+const builtCache = new Map<string, HeroLook>();
+
+/** 主人公の表示用の絵（待機2コマと攻撃1コマ） */
+export function heroLook(a: Avatar | undefined): HeroLook {
+  const av = a ?? DEFAULT_AVATAR;
+  if (av.preset === "wanderer") return { idle: [WANDERER.idle0, WANDERER.idle1], attack: WANDERER.attack, scale: 1.5 };
+  const key = JSON.stringify(av);
+  let look = builtCache.get(key);
+  if (!look) {
+    const sp = buildAvatar(av);
+    look = { idle: [sp, sp], attack: sp, scale: 2 };
+    builtCache.set(key, look);
+  }
+  return look;
 }

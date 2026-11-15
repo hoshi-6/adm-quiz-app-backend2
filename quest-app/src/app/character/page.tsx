@@ -14,7 +14,7 @@ import {
   OUTFIT_COLORS,
   SKIN_COLORS,
   WEAPONS,
-  buildAvatar,
+  heroLook,
 } from "@/lib/avatar";
 import { setAvatar, useGame } from "@/lib/store";
 
@@ -40,8 +40,10 @@ function Editor({ initial, name }: { initial: Avatar; name: string }) {
   const fileRef = useRef<HTMLInputElement>(null);
   const pendingFile = useRef<File | null>(null);
   const changed = JSON.stringify(a) !== JSON.stringify(initial);
-  const set = <K extends keyof Avatar>(k: K, v: Avatar[K]) => setA((x) => ({ ...x, [k]: v }));
-  const sprite = buildAvatar(a);
+  // 部品を選ぶと「組み立てた姿」に切り替わる
+  const set = <K extends keyof Avatar>(k: K, v: Avatar[K]) => setA((x) => ({ ...x, [k]: v, preset: undefined }));
+  const look = heroLook(a);
+  const wanderer = a.preset === "wanderer";
 
   async function fromPhoto(file: File) {
     setBusy(true);
@@ -61,7 +63,7 @@ function Editor({ initial, name }: { initial: Avatar; name: string }) {
         return;
       }
       if (!res.ok) throw new Error(json.error ?? `エラー（${res.status}）`);
-      setA({ ...DEFAULT_AVATAR, ...json.avatar });
+      setA({ ...DEFAULT_AVATAR, ...json.avatar, preset: undefined });
       setNeedPass(false);
       try {
         if (pass) localStorage.setItem(PASS_KEY, pass);
@@ -79,12 +81,14 @@ function Editor({ initial, name }: { initial: Avatar; name: string }) {
       <Window title="主人公の姿" right={<Link href="/dungeon" className="text-xs text-muted underline">ダンジョンへ</Link>}>
         <div className="flex items-end gap-4">
           <div className="pixel-box grid h-52 w-40 shrink-0 place-items-center" style={{ background: "radial-gradient(ellipse at 50% 85%, #3a1a14, #0b0809 70%)" }}>
-            <PixelSprite sprite={sprite} scale={4} title="主人公のドット絵" />
+            <PixelSprite sprite={look.idle[0]} scale={wanderer ? 2.5 : 4} title="主人公のドット絵" />
           </div>
           <div className="min-w-0 flex-1 space-y-2">
             <p className="truncate text-lg text-glow-strong glow-text">{name || "名もなき探索者"}</p>
             <p className="text-xs leading-relaxed text-muted">
-              {HAIR_COLORS[a.hairColor].name}髪の{HAIR_STYLES[a.hairStyle]}、{OUTFIT_COLORS[a.outfitColor].name}の{OUTFITS[a.outfit]}、{WEAPONS[a.weapon]}使い
+              {wanderer
+                ? "灰の放浪者：灰銀の髪と左目の古傷、深紅のスカーフ。片手半剣を携えて迷宮を渡り歩く剣士。"
+                : `${HAIR_COLORS[a.hairColor].name}髪の${HAIR_STYLES[a.hairStyle]}、${OUTFIT_COLORS[a.outfitColor].name}の${OUTFITS[a.outfit]}、${WEAPONS[a.weapon]}使い`}
             </p>
             <Button className="w-full" disabled={busy} onClick={() => fileRef.current?.click()}>
               {busy ? "読み取り中…" : "📷 写真から作る"}
@@ -122,7 +126,25 @@ function Editor({ initial, name }: { initial: Avatar; name: string }) {
         </p>
       </Window>
 
+      <Window title="姿の種類">
+        <div className="grid grid-cols-2 gap-2">
+          {[
+            { on: wanderer, label: "灰の放浪者", desc: "描きおろし 64×64・動きあり", sprite: heroLook(DEFAULT_AVATAR).idle[0], scale: 1, pick: () => setA({ ...a, preset: "wanderer" }) },
+            { on: !wanderer, label: "自分で組み立てる", desc: "部品や写真から作る", sprite: heroLook({ ...a, preset: undefined }).idle[0], scale: 1.33, pick: () => setA({ ...a, preset: undefined }) },
+          ].map((o) => (
+            <button key={o.label} type="button" onClick={o.pick} aria-pressed={o.on} className={cx("pixel-box flex items-center gap-2 p-2 text-left", o.on && "bg-glow/20")}>
+              <PixelSprite sprite={o.sprite} scale={o.scale} />
+              <span className="min-w-0">
+                <span className={cx("block text-sm", o.on ? "text-glow-strong" : "text-fg")}>{o.label}</span>
+                <span className="block text-[10px] text-muted">{o.desc}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      </Window>
+
       <Window title="部品を選ぶ">
+        {wanderer && <p className="mb-3 text-xs text-muted">部品を選ぶと「自分で組み立てる」に切り替わります。</p>}
         <div className="flex flex-col gap-4">
           <Choice label="髪型" options={HAIR_STYLES} value={a.hairStyle} onChange={(v) => set("hairStyle", v)} />
           <Swatches label="髪の色" options={HAIR_COLORS} value={a.hairColor} onChange={(v) => set("hairColor", v)} />
