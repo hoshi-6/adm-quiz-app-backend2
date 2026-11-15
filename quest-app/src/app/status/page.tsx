@@ -17,7 +17,7 @@ export default function StatusPage() {
       <Window title="STATUS">
         <div className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-1">
           <Link href="/character" className="pixel-box relative row-span-3 grid h-24 w-20 place-items-center" title="主人公の見た目を変える">
-            <PixelSprite sprite={heroLook(game.avatar).idle[0]} scale={heroLook(game.avatar).scale * 0.75} />
+            <PixelSprite sprite={heroLook(game.avatar).idle[0]} scale={heroLook(game.avatar).scale * 1.25} />
             <span className="absolute -right-2 -top-2 border-2 bg-bg px-1 font-mono text-sm" style={{ color: rank.color, borderColor: rank.color }}>
               {rank.rank}
             </span>

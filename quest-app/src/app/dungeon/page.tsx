@@ -14,17 +14,18 @@ import { SCENE_H, SCENE_W, sceneColors, sceneFor } from "@/lib/scenes";
 import { SKILLS, type SkillId } from "@/lib/skills";
 import { chapterLabel, chapterOf } from "@/lib/story";
 import { claimIdle, showOpening, touchDungeon, useGame } from "@/lib/store";
-import { type Float, type Runtime, TICK, castSkill, newRuntime, resetRuntime, step } from "./engine";
+import { FEATURES, type Feature, isUnlocked } from "@/lib/unlocks";
+import { type Float, type Runtime, TICK, castSkill, newRuntime, resetRuntime, showBanner, step } from "./engine";
 import { EquipPanel, HeroPanel, PartyPanel, RecordPanel, SettingsPanel, Sheet, TownPanel } from "./panels";
 
 type PanelId = "hero" | "train" | "equip" | "party" | "record" | "settings";
-const PANELS: { id: PanelId; icon: IconName; label: string }[] = [
+const PANELS: { id: PanelId; icon: IconName; label: string; feature?: Feature }[] = [
   { id: "hero", icon: "hero", label: "主人公" },
-  { id: "train", icon: "train", label: "訓練所" },
-  { id: "equip", icon: "equip", label: "装備" },
-  { id: "party", icon: "party", label: "仲間" },
+  { id: "train", icon: "train", label: "訓練所", feature: "train" },
+  { id: "equip", icon: "equip", label: "装備", feature: "equip" },
+  { id: "party", icon: "party", label: "仲間", feature: "party" },
   { id: "record", icon: "record", label: "記録" },
-  { id: "settings", icon: "settings", label: "設定" },
+  { id: "settings", icon: "settings", label: "移動", feature: "move" },
 ];
 
 const AUTO_KEY = "level-quest:auto-skill";
@@ -90,7 +91,7 @@ function Dungeon({ game }: { game: GameState }) {
   useEffect(() => {
     const id = setInterval(() => {
       if (pausedRef.current) return;
-      step(r, heroRef.current, gameRef.current, autoRef.current);
+      step(r, heroRef.current, gameRef.current, autoRef.current && isUnlocked(gameRef.current, "auto"));
       setFrame((f) => (f + 1) % 1_000_000);
     }, TICK);
     return () => clearInterval(id);
@@ -111,6 +112,13 @@ function Dungeon({ game }: { game: GameState }) {
   const colors = sceneColors(d.floor);
   const bossFloor = Math.floor((d.floor - 1) / 10) * 10 + 10;
   const onBoss = isBossFloor(d.floor) && d.stage === ENCOUNTERS_PER_FLOOR - 1;
+  const can = (f?: Feature) => !f || isUnlocked(game, f);
+  /** まだ使えない機能を押したとき：解放の条件を帯で知らせる */
+  const lockedTap = (f: Feature) => {
+    showBanner(r, `${FEATURES[f].name}：${FEATURES[f].cond}で解放`, "#9a8a76");
+    setFrame((x) => x + 1);
+  };
+  const autoOn = auto && can("auto");
   const questDone = !!game.days[toDateKey()]?.cleared || !!game.days[toDateKey()]?.rest;
 
   return (
@@ -169,7 +177,7 @@ function Dungeon({ game }: { game: GameState }) {
       <div className="absolute inset-x-0 top-0 flex flex-col gap-1.5 p-2">
         <div className="flex justify-end gap-1">
           {PANELS.map((p) => (
-            <RoundButton key={p.id} icon={p.icon} label={p.label} onClick={() => setPanel(p.id)} />
+            <RoundButton key={p.id} icon={p.icon} label={p.label} locked={!can(p.feature)} onClick={() => (can(p.feature) ? setPanel(p.id) : lockedTap(p.feature!))} />
           ))}
         </div>
         <div className="hud-bar px-3 py-1.5 text-xs">
@@ -203,7 +211,7 @@ function Dungeon({ game }: { game: GameState }) {
             </div>
           </div>
           <div className="flex w-[45%] items-center gap-1.5">
-            <PixelSprite sprite={heroLook(game.avatar).idle[0]} scale={heroLook(game.avatar).scale * 0.33} />
+            <PixelSprite sprite={heroLook(game.avatar).idle[0]} scale={heroLook(game.avatar).scale * 0.5} />
             <div className="flex-1">
               <div className="h-3 border-2 border-black bg-black/70">
                 <div className={cx("pixel-segments h-full", r.heroHp / hero.maxHp < 0.3 ? "bg-gold" : "bg-ok")} style={{ width: `${Math.max(0, Math.min(1, r.heroHp / hero.maxHp)) * 100}%` }} />
@@ -216,10 +224,15 @@ function Dungeon({ game }: { game: GameState }) {
         </div>
         {/* スキル */}
         <div className="flex items-start justify-end gap-1.5">
-          <button type="button" onClick={toggleAuto} aria-pressed={auto} className={cx("hud-bar mt-3 px-2 py-1 font-mono text-[10px]", auto ? "text-ok" : "text-muted")}>
+          <button
+            type="button"
+            onClick={() => (can("auto") ? toggleAuto() : lockedTap("auto"))}
+            aria-pressed={autoOn}
+            className={cx("hud-bar mt-3 px-2 py-1 font-mono text-[10px]", autoOn ? "text-ok" : "text-muted")}
+          >
             AUTO
             <br />
-            {auto ? "ON" : "OFF"}
+            {can("auto") ? (autoOn ? "ON" : "OFF") : "🔒"}
           </button>
           {SKILLS.map((s) => (
             <SkillButton key={s.id} id={s.id} r={r} level={game.level} onUse={() => castSkill(r, hero, game.level, s.id)} />
@@ -233,8 +246,8 @@ function Dungeon({ game }: { game: GameState }) {
           <PixelSprite sprite={ICONS.quest} scale={1.25} />
           {!questDone && <span className="round absolute -right-1.5 -top-1.5 grid h-5 w-5 place-items-center bg-danger text-[11px] text-white">!</span>}
         </Link>
-        <button type="button" className="side-btn" onClick={() => setPanel("equip")} aria-label="装備">
-          <PixelSprite sprite={ICONS.chest} scale={1.25} />
+        <button type="button" className={cx("side-btn", !can("equip") && "opacity-50")} onClick={() => (can("equip") ? setPanel("equip") : lockedTap("equip"))} aria-label="装備">
+          <PixelSprite sprite={can("equip") ? ICONS.chest : ICONS.lock} scale={1.25} />
         </button>
         <button type="button" className="side-btn" onClick={() => setPaused((p) => !p)} aria-label={paused ? "再開" : "一時停止"}>
           <PixelSprite sprite={paused ? ICONS.play : ICONS.pause} scale={1.25} />
@@ -266,7 +279,7 @@ function Dungeon({ game }: { game: GameState }) {
           {panel === "hero" && <HeroPanel hero={hero} game={game} />}
           {panel === "train" && <TownPanel game={game} />}
           {panel === "equip" && <EquipPanel game={game} />}
-          {panel === "party" && <PartyPanel hero={hero} />}
+          {panel === "party" && <PartyPanel hero={hero} game={game} />}
           {panel === "record" && <RecordPanel game={game} log={r.log} />}
           {panel === "settings" && <SettingsPanel game={game} onWarp={(f) => resetRuntime(r, hero, `B${f}F へ移動した。`)} />}
         </Sheet>
@@ -284,17 +297,18 @@ function Actors({ r, hero, game, now, reflection }: { r: Runtime; hero: Hero; ga
   const showUi = !reflection;
   return (
     <div className={cx("absolute left-[54px] right-2 flex items-end justify-between gap-1", reflection ? "bottom-0" : "bottom-[13%]")}>
-      <div className="flex min-w-0 items-end gap-0.5">
+      <div className="flex min-w-0 items-end">
         {hero.allies
           .slice()
           .reverse()
-          .map((a) => (
-            <div key={a.id} className={cx("flex flex-col items-center transition-transform", now - (r.allyAct[a.id] ?? 0) < 200 && "-translate-y-1")}>
-              <PixelSprite sprite={a.sprite} scale={1.25} flip={a.id === "wolf"} />
+          .map((a, i) => (
+            <div key={a.id} className={cx("flex flex-col items-center transition-transform", i > 0 && "-ml-3", now - (r.allyAct[a.id] ?? 0) < 200 && "-translate-y-1")}>
+              {/* 仲間は 24×32 を 2 倍＝主人公と同じ高さ */}
+              <PixelSprite sprite={a.sprite} scale={2} flip={a.id === "wolf"} />
               {showUi && <span className="text-[9px] text-fg/70">{a.name}</span>}
             </div>
           ))}
-        <div className="flex w-24 flex-col items-center">
+        <div className={cx("flex w-16 flex-col items-center", hero.allies.length > 0 && "-ml-2")}>
           <div className={cx("transition-transform", now - r.heroHit < 150 && "-translate-x-1", attacking && "translate-x-2", r.phase === "dead" && "rotate-90 opacity-40")}>
             <PixelSprite sprite={heroSprite} scale={look.scale} className={hero.blessed ? "blessed" : undefined} />
           </div>
@@ -302,7 +316,7 @@ function Actors({ r, hero, game, now, reflection }: { r: Runtime; hero: Hero; ga
         </div>
       </div>
       {r.enemy && r.phase !== "walk" && (
-        <div className="flex w-24 shrink-0 flex-col items-center">
+        <div className="flex w-20 shrink-0 flex-col items-center">
           {showUi && (
             <div className="mb-1 w-full">
               <div className="h-2 border border-black bg-black/70">
@@ -311,7 +325,8 @@ function Actors({ r, hero, game, now, reflection }: { r: Runtime; hero: Hero; ga
             </div>
           )}
           <div className={cx("transition-transform", now - r.enemyHit < 150 && "translate-x-1 brightness-200")}>
-            <PixelSprite sprite={r.enemy.sprite} scale={r.enemy.boss ? 4 : 3} title={showUi ? r.enemy.name : undefined} />
+            {/* 雑魚は 24×24 を 2.5 倍、ボスは 64×64 を 1.25 倍（少しだけ大きく） */}
+            <PixelSprite sprite={r.enemy.sprite} scale={r.enemy.boss ? 1.25 : 2.5} title={showUi ? r.enemy.name : undefined} />
           </div>
           {showUi && <p className={cx("max-w-full truncate text-[10px]", r.enemy.boss ? "text-danger" : "text-fg/90")}>{r.enemy.name}</p>}
         </div>
@@ -351,11 +366,11 @@ function floatPos(f: Float): React.CSSProperties {
 
 // ---- HUD の部品 ----
 
-function RoundButton({ icon, label, onClick }: { icon: IconName; label: string; onClick: () => void }) {
+function RoundButton({ icon, label, onClick, locked }: { icon: IconName; label: string; onClick: () => void; locked?: boolean }) {
   return (
-    <button type="button" onClick={onClick} className="flex w-12 flex-col items-center" aria-label={label}>
-      <span className="round-btn grid h-11 w-11 place-items-center">
-        <PixelSprite sprite={ICONS[icon]} scale={1.1} />
+    <button type="button" onClick={onClick} className="flex w-12 flex-col items-center" aria-label={locked ? `${label}（未解放）` : label}>
+      <span className={cx("round-btn relative grid h-11 w-11 place-items-center", locked && "opacity-60 grayscale")}>
+        <PixelSprite sprite={locked ? ICONS.lock : ICONS[icon]} scale={1.1} />
       </span>
       <span className="mt-0.5 text-[9px] leading-none text-fg/80" style={{ textShadow: "1px 1px 0 #000" }}>
         {label}

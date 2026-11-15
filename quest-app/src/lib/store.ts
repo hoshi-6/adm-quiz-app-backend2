@@ -14,7 +14,8 @@ import {
   upgradeCost,
 } from "./dungeon";
 import type { Avatar } from "./avatar";
-import { ALLIES, CHAPTERS, chapterLabel, chapterOf } from "./story";
+import { ALLIES, type AllyId, CHAPTERS, alliesAt, chapterLabel, chapterOf } from "./story";
+import { checkUnlocks } from "./unlocks";
 import {
   type BodyEntry,
   type Exercise,
@@ -90,7 +91,11 @@ function load(): GameState {
 
 /** 古い保存データに、あとから増えた項目を補う */
 function normalize(parsed: GameState): GameState {
-  return { ...newGame(), ...parsed, dungeon: { ...newDungeon(), ...parsed.dungeon } };
+  const g = { ...newGame(), ...parsed, dungeon: { ...newDungeon(), ...parsed.dungeon } };
+  // 仲間を「解放する」仕組みになる前のデータは、すでに出会っていた仲間をそのまま残す
+  if (!parsed.dungeon?.allies) g.dungeon.allies = alliesAt(g.dungeon.deepest).map((a) => a.id);
+  if (!parsed.dungeon?.unlocked) checkUnlocks(g);
+  return g;
 }
 
 function save() {
@@ -326,8 +331,26 @@ export function dungeonKill(gold: number, item: Item | null): LootResult {
       }
     }
     d.lastActive = Date.now();
+    for (const name of checkUnlocks(s)) {
+      pushNotice({ kind: "info", title: "解放", lines: [`「${name}」が使えるようになった！`] });
+    }
   });
   return loot;
+}
+
+/** 出会った仲間を、条件（現実のレベルとゴールド）を満たしていれば仲間にする */
+export function recruitAlly(id: AllyId): boolean {
+  let ok = false;
+  mutate((s) => {
+    const a = ALLIES.find((x) => x.id === id);
+    const d = s.dungeon;
+    if (!a || d.allies.includes(id) || d.deepest < a.joinFloor || s.level < a.level || d.gold < a.cost) return;
+    d.gold -= a.cost;
+    d.allies.push(id);
+    ok = true;
+    pushNotice({ kind: "ally", title: `${a.name}が仲間になった！`, lines: [`【${a.role}】${a.desc}`] });
+  });
+  return ok;
 }
 
 /** 新しい階に初めて着いたときの物語（ボス撃破の語り・次の章・仲間の加入） */
@@ -340,7 +363,11 @@ function storyEvents(floor: number) {
   }
   const ally = ALLIES.find((a) => a.joinFloor === floor);
   if (ally) {
-    pushNotice({ kind: "ally", title: `${ally.name}が仲間になった！`, lines: [`【${ally.role}】${ally.desc}`] });
+    pushNotice({
+      kind: "ally",
+      title: `${ally.name}と出会った`,
+      lines: [`【${ally.role}】${ally.desc}`, `仲間パネルで「仲間にする」を押すと加わります（条件：Lv.${ally.level}・${ally.cost.toLocaleString()}G）`],
+    });
   }
 }
 

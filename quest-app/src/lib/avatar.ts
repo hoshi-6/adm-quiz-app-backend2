@@ -394,7 +394,7 @@ export function buildAvatar(a: Avatar): Sprite {
 export interface HeroLook {
   idle: [Sprite, Sprite];
   attack: Sprite;
-  /** 表示倍率（描きおろしは 64×64 を 1.5 倍、部品の姿は 32×48 を 2 倍） */
+  /** 表示倍率（仲間や敵と同じ高さ＝約64ドットになるように。描きおろしは等倍、部品の姿は 32×48 を 1.33 倍） */
   scale: number;
 }
 
@@ -403,12 +403,12 @@ const builtCache = new Map<string, HeroLook>();
 /** 主人公の表示用の絵（待機2コマと攻撃1コマ） */
 export function heroLook(a: Avatar | undefined): HeroLook {
   const av = a ?? DEFAULT_AVATAR;
-  if (av.preset === "wanderer") return { idle: [WANDERER.idle0, WANDERER.idle1], attack: WANDERER.attack, scale: 1.5 };
+  if (av.preset === "wanderer") return { idle: [WANDERER.idle0, WANDERER.idle1], attack: WANDERER.attack, scale: 1 };
   const key = JSON.stringify(av);
   let look = builtCache.get(key);
   if (!look) {
     const sp = buildAvatar(av);
-    look = { idle: [sp, sp], attack: sp, scale: 2 };
+    look = { idle: [sp, sp], attack: sp, scale: 4 / 3 };
     builtCache.set(key, look);
   }
   return look;

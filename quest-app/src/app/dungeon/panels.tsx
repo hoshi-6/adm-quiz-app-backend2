@@ -9,7 +9,7 @@ import { fmtBig } from "@/lib/format";
 import type { GameState } from "@/lib/game";
 import { SKILLS } from "@/lib/skills";
 import { ALLIES, CHAPTERS, chapterLabel } from "@/lib/story";
-import { buyUpgrade, setFarm, unequip, warpTo } from "@/lib/store";
+import { buyUpgrade, recruitAlly, setFarm, unequip, warpTo } from "@/lib/store";
 
 export function Sheet({ title, onClose, children }: { title: string; onClose: () => void; children: ReactNode }) {
   useEffect(() => {
@@ -151,22 +151,47 @@ export function EquipPanel({ game }: { game: GameState }) {
   );
 }
 
-export function PartyPanel({ hero }: { hero: Hero }) {
+export function PartyPanel({ hero, game }: { hero: Hero; game: GameState }) {
+  const d = game.dungeon;
   return (
-    <ul className="grid grid-cols-1 gap-2 text-xs sm:grid-cols-2">
-      {ALLIES.map((a) => {
-        const joined = hero.allies.includes(a);
-        return (
-          <li key={a.id} className={cx("pixel-box flex items-center gap-3 p-2", !joined && "opacity-45")}>
-            <PixelSprite sprite={joined ? a.sprite : { ...a.sprite, palette: Object.fromEntries(Object.keys(a.sprite.palette).map((k) => [k, "#2a2226"])) }} scale={1.5} flip={a.id === "wolf"} />
-            <div className="min-w-0">
-              <p className="text-sm">{joined ? `${a.name}（${a.role}）` : "？？？"}</p>
-              <p className="text-[11px] leading-snug text-muted">{joined ? a.desc : `B${a.joinFloor}F で出会う`}</p>
-            </div>
-          </li>
-        );
-      })}
-    </ul>
+    <div>
+      <p className="mb-3 text-xs leading-relaxed text-muted">
+        仲間は、ダンジョンで出会ったあと「仲間にする」で加わります。条件は<span className="text-glow-strong">現実のレベル</span>（デイリークエストで上がる）とゴールドです。
+      </p>
+      <ul className="flex flex-col gap-2 text-xs">
+        {ALLIES.map((a) => {
+          const joined = hero.allies.includes(a);
+          const met = d.deepest >= a.joinFloor;
+          const lvOk = game.level >= a.level;
+          const goldOk = d.gold >= a.cost;
+          const dark = { ...a.sprite, palette: Object.fromEntries(Object.keys(a.sprite.palette).map((k) => [k, "#2a2226"])) };
+          return (
+            <li key={a.id} className={cx("pixel-box flex items-center gap-3 p-2", !met && "opacity-50")}>
+              <PixelSprite sprite={met ? a.sprite : dark} scale={1.5} flip={a.id === "wolf"} />
+              <div className="min-w-0 flex-1">
+                <p className="text-sm">
+                  {met ? `${a.name}（${a.role}）` : "？？？"}
+                  {joined && <span className="ml-1 text-ok">加入中</span>}
+                </p>
+                <p className="text-[11px] leading-snug text-muted">{met ? a.desc : `B${a.joinFloor}F で出会う`}</p>
+                {met && !joined && (
+                  <p className="mt-0.5 text-[11px]">
+                    <span className={lvOk ? "text-ok" : "text-danger"}>Lv.{a.level}以上</span>
+                    <span className="mx-1 text-muted">・</span>
+                    <span className={goldOk ? "text-ok" : "text-danger"}>{fmtBig(a.cost)}G</span>
+                  </p>
+                )}
+              </div>
+              {met && !joined && (
+                <Button className="shrink-0 px-2.5 py-1.5 text-xs" disabled={!lvOk || !goldOk} onClick={() => recruitAlly(a.id)}>
+                  仲間にする
+                </Button>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
   );
 }
 

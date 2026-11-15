@@ -295,3 +295,8 @@ export function step(r: Runtime, hero: Hero, game: GameState, auto: boolean) {
     }
   }
 }
+
+/** 画面の中央に帯を出す（解放の条件の案内など） */
+export function showBanner(r: Runtime, text: string, color: string) {
+  r.banner = { text, color, born: Date.now() };
+}

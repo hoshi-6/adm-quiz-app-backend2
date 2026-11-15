@@ -1,4 +1,5 @@
 // ダンジョンの物語（オリジナル）。10階ごとに1章、章の最後（10階）にボス。下へ進むほど強くなる。
+import { BOSS_SPRITES, type BossId } from "./bossSprites";
 import { HEALER, MAGE, type Palette, type Sprite, T, TANK, type TemplateName, WOLF_PAL_SILVER, pal } from "./sprites";
 
 export interface Foe {
@@ -18,6 +19,8 @@ export interface Chapter {
 }
 
 const foe = (name: string, t: TemplateName, p: Palette): Foe => ({ name, sprite: { rows: T[t], palette: p } });
+/** ボスは主人公と同じ 64×64 の描きおろし */
+const boss = (name: string, id: BossId): Foe => ({ name, sprite: BOSS_SPRITES[id] });
 
 export const CHAPTERS: Chapter[] = [
   {
@@ -29,7 +32,7 @@ export const CHAPTERS: Chapter[] = [
       foe("ススコウモリ", "bat", pal("#4a4060", "#2d2640", "#6b5e8a")),
       foe("灰スライム", "slime", pal("#8fa3a8", "#5f7378", "#c9d8db", "#111")),
     ],
-    boss: foe("地下道の番犬", "wolf", pal("#5a4a3a", "#3a2e24", "#7a6650", "#ff3b4e")),
+    boss: boss("地下道の番犬", "hound"),
     outro: ["番犬が崩れ落ちた。", "この迷宮はまだ、ずっと下へ続いている――。"],
   },
   {
@@ -41,7 +44,7 @@ export const CHAPTERS: Chapter[] = [
       foe("さまよう霊", "ghost", pal("#9fd8e8", "#6aa8b8", "#d8f4ff", "#1a2a40")),
       foe("墓守グモ", "spider", pal("#3a3048", "#241c30", "#5a4a70", "#ff3b4e")),
     ],
-    boss: foe("骨の騎士団長", "knight", pal("#8a8070", "#5a5246", "#d8d0bc", "#ff3b4e", { c: "#cfc6b0", r: "#6a1f2a" })),
+    boss: boss("骨の騎士団長", "knight"),
     outro: ["騎士団長の鎧が砕け、回廊に静けさが戻った。"],
   },
   {
@@ -53,7 +56,7 @@ export const CHAPTERS: Chapter[] = [
       foe("大猪", "boar", pal("#7a4f30", "#4f321e", "#a06a42")),
       foe("森マムシ", "snake", pal("#4f8a3a", "#2f5a22", "#7ab85a", "#ffd35c")),
     ],
-    boss: foe("森の王獣", "wolf", pal("#c8962a", "#8a6418", "#ffd35c", "#ff3b4e")),
+    boss: boss("森の王獣", "lion"),
     outro: ["王獣が倒れると、森の木々がざわめいて道を開いた。"],
   },
   {
@@ -65,7 +68,7 @@ export const CHAPTERS: Chapter[] = [
       foe("溶岩トカゲ", "lizard", pal("#b8401a", "#7a2410", "#ff7a3a", "#ffe08a")),
       foe("岩の番人", "golem", pal("#7a6a5a", "#4f4438", "#a8988a", "#ff8a2a")),
     ],
-    boss: foe("炎獄竜", "dragon", pal("#d83a1a", "#8a1f10", "#ff8a4a", "#ffe08a")),
+    boss: boss("炎獄竜", "dragon"),
     outro: ["炎獄竜の咆哮が消え、坑道の熱がゆっくりと引いていく。"],
   },
   {
@@ -77,7 +80,7 @@ export const CHAPTERS: Chapter[] = [
       foe("霜の巨兵", "golem", pal("#a8c8e0", "#6a8aa8", "#e8f4ff", "#2a8aff")),
       foe("凍てつく魔眼", "eye", pal("#4a6a9a", "#2a3a5a", "#8aaad8", "#2a8aff", { w: "#e8f4ff" })),
     ],
-    boss: foe("氷晶の巨像", "golem", pal("#5cc8ff", "#2a7ab8", "#d8f4ff", "#ffffff")),
+    boss: boss("氷晶の巨像", "golem"),
     outro: ["巨像が砕け、氷の破片が星のようにきらめいた。"],
   },
   {
@@ -89,7 +92,7 @@ export const CHAPTERS: Chapter[] = [
       foe("双頭の魔犬", "wolf", pal("#3a2040", "#20102a", "#5a3a6a", "#ff3b4e")),
       foe("呪いの騎士", "knight", pal("#4a3a6a", "#2a1f40", "#7a6aa0", "#c08cff", { c: "#6a5a90", r: "#c08cff" })),
     ],
-    boss: foe("門の魔王", "demon", pal("#6a1f2a", "#3a0f18", "#a83a4a", "#ffd35c")),
+    boss: boss("門の魔王", "demon"),
     outro: ["魔王が膝をつき、門が音を立てて開いた。", "その先には、さらに深い闇があった。"],
   },
   {
@@ -101,7 +104,7 @@ export const CHAPTERS: Chapter[] = [
       foe("星喰いの眼", "eye", pal("#1f1a3a", "#0f0c20", "#4a3a8a", "#ffd35c", { w: "#c8c0ff" })),
       foe("影法師", "ghost", pal("#2a2a3a", "#16161f", "#4a4a60", "#5cf2ff")),
     ],
-    boss: foe("深淵の主", "dragon", pal("#2a1f5a", "#140f30", "#5a4ab8", "#5cf2ff")),
+    boss: boss("深淵の主", "abyss"),
     outro: ["深淵の主が消えた。だが深淵は、まだ終わらない――。"],
   },
 ];
@@ -125,16 +128,20 @@ export interface Ally {
   name: string;
   role: string;
   desc: string;
-  /** この階に着いたら仲間になる */
+  /** この階に着くと出会う */
   joinFloor: number;
+  /** 仲間にするのに必要な現実のレベル */
+  level: number;
+  /** 仲間にするのに必要なゴールド */
+  cost: number;
   sprite: Sprite;
 }
 
 export const ALLIES: Ally[] = [
-  { id: "healer", name: "ミオ", role: "癒し手", desc: "4秒ごとに最大HPの8%を回復", joinFloor: 11, sprite: HEALER },
-  { id: "tank", name: "ゴウ", role: "盾の戦士", desc: "受けるダメージを20%減らす。攻撃は控えめ", joinFloor: 21, sprite: TANK },
-  { id: "mage", name: "セイラ", role: "魔導士", desc: "3秒ごとに防御を無視する魔法（攻撃×0.8）", joinFloor: 31, sprite: MAGE },
-  { id: "wolf", name: "ハク", role: "銀狼", desc: "素早く噛みつく（1秒ごとに攻撃×0.35）", joinFloor: 41, sprite: { rows: T.wolf, palette: WOLF_PAL_SILVER } },
+  { id: "healer", name: "ミオ", role: "癒し手", desc: "4秒ごとに最大HPの8%を回復", joinFloor: 11, level: 5, cost: 300, sprite: HEALER },
+  { id: "tank", name: "ゴウ", role: "盾の戦士", desc: "受けるダメージを20%減らす。攻撃は控えめ", joinFloor: 21, level: 10, cost: 3000, sprite: TANK },
+  { id: "mage", name: "セイラ", role: "魔導士", desc: "3秒ごとに防御を無視する魔法（攻撃×0.8）", joinFloor: 31, level: 15, cost: 20000, sprite: MAGE },
+  { id: "wolf", name: "ハク", role: "銀狼", desc: "素早く噛みつく（1秒ごとに攻撃×0.35）", joinFloor: 41, level: 20, cost: 150000, sprite: { rows: T.wolf, palette: WOLF_PAL_SILVER } },
 ];
 
 export function alliesAt(deepest: number): Ally[] {

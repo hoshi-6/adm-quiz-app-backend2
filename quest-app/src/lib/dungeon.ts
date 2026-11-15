@@ -2,7 +2,7 @@
 import { toDateKey } from "./date";
 import { type GameState, itemDone } from "./game";
 import type { Sprite } from "./sprites";
-import { type Ally, alliesAt, chapterOf } from "./story";
+import { ALLIES, type Ally, type AllyId, chapterOf } from "./story";
 
 export type Slot = "weapon" | "armor" | "accessory";
 
@@ -42,6 +42,10 @@ export interface DungeonState {
   lastActive: number;
   /** 語りを表示した章の数 */
   storyChapter: number;
+  /** 仲間になった人 */
+  allies: AllyId[];
+  /** 解放した機能（unlocks.ts） */
+  unlocked: string[];
 }
 
 export const ENCOUNTERS_PER_FLOOR = 5;
@@ -61,6 +65,8 @@ export function newDungeon(): DungeonState {
     farm: false,
     lastActive: Date.now(),
     storyChapter: 0,
+    allies: [],
+    unlocked: [],
   };
 }
 
@@ -124,7 +130,7 @@ export function heroStats(g: GameState, today: string = toDateKey()): Hero {
   const squatPct = Math.floor((t.squat ?? 0) / 100);
   const runPct = Math.floor((t.run ?? 0) / 5);
 
-  const allies = alliesAt(dg.deepest);
+  const allies = ALLIES.filter((a) => dg.allies.includes(a.id));
   const rec = g.days[today];
   const blessed = !!rec?.cleared;
   const tired = !!rec && !rec.cleared && rec.items.some((i) => i.penalty && !itemDone(i));
