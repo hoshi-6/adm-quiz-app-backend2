@@ -223,3 +223,105 @@ select {
     animation: none;
   }
 }
+
+/* ---- ダンジョン画面の HUD ---- */
+.round,
+.round-btn {
+  border-radius: 9999px !important;
+}
+/* 金の縁取りの丸いボタン */
+.round-btn {
+  background: radial-gradient(circle at 40% 35%, #3a2a24, #120c0d 70%);
+  box-shadow:
+    0 0 0 2px #000,
+    0 0 0 4px #9a7a3e,
+    0 0 0 5px #000,
+    inset 0 -3px 0 rgba(0, 0, 0, 0.5),
+    0 3px 6px rgba(0, 0, 0, 0.6);
+}
+.round-btn:active {
+  transform: translateY(1px);
+}
+.skill-active {
+  box-shadow:
+    0 0 0 2px #000,
+    0 0 0 4px #e6c27a,
+    0 0 0 5px #000,
+    0 0 14px rgba(230, 194, 122, 0.8);
+}
+.hud-bar {
+  background: rgba(8, 5, 6, 0.82);
+  box-shadow:
+    0 0 0 2px #000,
+    inset 0 0 0 1px #3e2e2a;
+}
+/* 両端が斜めに切れた数値の帯 */
+.hud-pill {
+  background: linear-gradient(180deg, rgba(30, 20, 18, 0.92), rgba(8, 5, 6, 0.92));
+  clip-path: polygon(8px 0, calc(100% - 8px) 0, 100% 50%, calc(100% - 8px) 100%, 8px 100%, 0 50%);
+}
+.side-btn {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(180deg, #2a1e1a, #120c0d);
+  box-shadow:
+    0 0 0 2px #000,
+    0 0 0 4px #5a4630,
+    inset 2px 2px 0 rgba(255, 255, 255, 0.08);
+}
+/* 床に映る影（下ほど消える） */
+.reflection {
+  opacity: 0.28;
+  -webkit-mask: linear-gradient(180deg, #000, transparent 70%);
+  mask: linear-gradient(180deg, #000, transparent 70%);
+  filter: blur(0.4px);
+}
+@keyframes coin-pop {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0);
+  }
+  10% {
+    opacity: 1;
+  }
+  45% {
+    transform: translate(calc(var(--dx) * 0.6), calc(-1 * var(--dy) - 26px));
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--dx), 18px);
+  }
+}
+.coin-pop {
+  opacity: 0;
+  animation: coin-pop 0.9s steps(12) forwards;
+}
+@keyframes sheet-in {
+  from {
+    transform: translateY(40px);
+    opacity: 0;
+  }
+}
+.sheet-in {
+  animation: sheet-in 0.2s steps(4);
+}
+@keyframes banner-in {
+  from {
+    transform: scaleY(0);
+  }
+}
+.banner-in {
+  animation: banner-in 0.15s steps(3);
+}
+@media (prefers-reduced-motion: reduce) {
+  .coin-pop,
+  .sheet-in,
+  .banner-in {
+    animation: none;
+  }
+  .coin-pop {
+    display: none;
+  }
+}

@@ -274,3 +274,18 @@ export function sceneFor(floor: number, boss: boolean): Px[] {
   vignette(out, boss ? 1.4 : 1);
   return out;
 }
+
+/** 画面の上（背景の続き）と下（床の続き）を塗る色。章の順 */
+const COLORS = [
+  { top: "#1e1a17", floor: "#1c1a18" },
+  { top: "#18151b", floor: "#18151b" },
+  { top: "#050806", floor: "#14160c" },
+  { top: "#1a0e0a", floor: "#1a0e0a" },
+  { top: "#101a24", floor: "#1a2836" },
+  { top: "#0e0304", floor: "#120808" },
+  { top: "#020106", floor: "#0c0818" },
+];
+
+export function sceneColors(floor: number) {
+  return COLORS[chapterOf(floor).index];
+}

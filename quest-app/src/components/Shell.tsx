@@ -83,7 +83,7 @@ export function Shell({ children }: { children: ReactNode }) {
           )}
         </header>
 
-        <main className="flex-1 px-4 pb-28 pt-4 md:pb-10">
+        <main className={cx("flex-1", pathname === "/dungeon" ? "p-0" : "px-4 pb-28 pt-4 md:pb-10")}>
           {game ? children : <p className="py-20 text-center font-mono text-muted">SYSTEM LOADING…</p>}
         </main>
       </div>
