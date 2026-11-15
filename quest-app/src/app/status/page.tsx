@@ -1,6 +1,9 @@
 "use client";
 
+import Link from "next/link";
+import { PixelSprite } from "@/components/PixelSprite";
 import { Bar, Button, Window, cx } from "@/components/ui";
+import { DEFAULT_AVATAR, buildAvatar } from "@/lib/avatar";
 import { STATS, TITLE_DEFS, rankOf, targetFor, titleName, xpToNext } from "@/lib/game";
 import { allocateStat, equipTitle, useGame } from "@/lib/store";
 
@@ -13,9 +16,12 @@ export default function StatusPage() {
     <div className="mx-auto flex max-w-xl flex-col gap-4">
       <Window title="STATUS">
         <div className="grid grid-cols-[auto_1fr] items-center gap-x-4 gap-y-1">
-          <div className="row-span-3 grid h-20 w-20 place-items-center rounded border-2 font-mono text-4xl font-black" style={{ color: rank.color, borderColor: rank.color, boxShadow: `0 0 16px ${rank.color}55` }}>
-            {rank.rank}
-          </div>
+          <Link href="/character" className="pixel-box relative row-span-3 grid h-24 w-20 place-items-center" title="主人公の見た目を変える">
+            <PixelSprite sprite={buildAvatar(game.avatar ?? DEFAULT_AVATAR)} scale={1.5} />
+            <span className="absolute -right-2 -top-2 border-2 bg-bg px-1 font-mono text-sm" style={{ color: rank.color, borderColor: rank.color }}>
+              {rank.rank}
+            </span>
+          </Link>
           <p className="truncate text-lg font-bold">{game.playerName || "名前未登録"}</p>
           <p className="truncate text-xs text-gold">{game.equippedTitle ? `称号：${titleName(game.equippedTitle)}` : "称号：なし"}</p>
           <p className="font-mono text-sm">

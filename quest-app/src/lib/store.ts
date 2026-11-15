@@ -13,6 +13,7 @@ import {
   sellPrice,
   upgradeCost,
 } from "./dungeon";
+import type { Avatar } from "./avatar";
 import { ALLIES, CHAPTERS, chapterLabel, chapterOf } from "./story";
 import {
   type BodyEntry,
@@ -217,6 +218,12 @@ export function recordProgress(exerciseId: string, opts: { delta?: number; value
     }
   });
   return clearedNow;
+}
+
+export function setAvatar(avatar: Avatar) {
+  mutate((s) => {
+    s.avatar = avatar;
+  });
 }
 
 export function allocateStat(key: StatKey, n: number) {

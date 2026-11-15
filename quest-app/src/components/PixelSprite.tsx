@@ -1,24 +1,27 @@
+import { refine } from "@/lib/pixel";
 import type { Sprite } from "@/lib/sprites";
 
-/** ドット絵を SVG で描く（横に続く同じ色はまとめて1つの四角にする） */
-export function PixelSprite({ sprite, scale = 4, flip, className, title }: { sprite: Sprite; scale?: number; flip?: boolean; className?: string; title?: string }) {
-  const h = sprite.rows.length;
-  const w = Math.max(...sprite.rows.map((r) => r.length));
+/**
+ * ドット絵を SVG で描く。細かくした（2倍の解像度にした）絵を、scale 倍で表示する。
+ * 横に続く同じ色はまとめて1つの四角にする。
+ */
+export function PixelSprite({ sprite, scale = 2, flip, className, title }: { sprite: Sprite; scale?: number; flip?: boolean; className?: string; title?: string }) {
+  const { w, h, px } = refine(sprite);
   const rects: { x: number; y: number; w: number; c: string }[] = [];
-  sprite.rows.forEach((row, y) => {
+  for (let y = 0; y < h; y++) {
     let x = 0;
-    while (x < row.length) {
-      const ch = row[x];
-      if (ch === "." || ch === " " || !sprite.palette[ch]) {
+    while (x < w) {
+      const c = px[y * w + x];
+      if (!c) {
         x++;
         continue;
       }
       let len = 1;
-      while (row[x + len] === ch) len++;
-      rects.push({ x, y, w: len, c: sprite.palette[ch] });
+      while (x + len < w && px[y * w + x + len] === c) len++;
+      rects.push({ x, y, w: len, c });
       x += len;
     }
-  });
+  }
   return (
     <svg
       viewBox={`0 0 ${w} ${h}`}

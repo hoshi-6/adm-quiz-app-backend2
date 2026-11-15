@@ -1,18 +1,21 @@
 @import "tailwindcss";
 
 /* システムウィンドウ風の配色（暗い背景に青く光る枠）。この見た目は暗色のみ */
+/* ダークファンタジーの配色：黒に近い背景、くすんだ金と血の赤。この見た目は暗色のみ */
 :root {
-  --bg: #060a13;
-  --surface: #0b1424;
-  --subtle: #12203a;
-  --line: #1e3a5f;
-  --fg: #e4efff;
-  --muted: #8ba3c2;
-  --glow: #45b8ff;
-  --glow-strong: #8fd6ff;
-  --ok: #5cf2b0;
-  --gold: #ffd35c;
-  --danger: #ff5d6c;
+  --bg: #0b0809;
+  --surface: #151011;
+  --subtle: #241a1a;
+  --line: #3e2e2a;
+  --fg: #e8dcc6;
+  --muted: #9a8a76;
+  /* 枠や強調（くすんだ金） */
+  --glow: #9a7a3e;
+  --glow-strong: #e6c27a;
+  --ok: #8ab06a;
+  --gold: #e0b24a;
+  --danger: #c8382e;
+  --blood: #7a1a1a;
   color-scheme: dark;
 }
 
@@ -49,10 +52,12 @@ body {
 body {
   font-synthesis: none;
   -webkit-font-smoothing: none;
+  /* 石畳のような薄い格子と、上から差す赤い闇 */
   background-image:
-    linear-gradient(rgba(69, 184, 255, 0.04) 2px, transparent 2px),
-    linear-gradient(90deg, rgba(69, 184, 255, 0.04) 2px, transparent 2px);
-  background-size: 32px 32px;
+    radial-gradient(ellipse 90% 40% at 50% 0%, rgba(122, 26, 26, 0.28), transparent 70%),
+    linear-gradient(rgba(0, 0, 0, 0.35) 2px, transparent 2px),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.35) 2px, transparent 2px);
+  background-size: 100% 100%, 24px 24px, 48px 24px;
   background-attachment: fixed;
 }
 
@@ -60,14 +65,15 @@ body {
 .sys-window,
 .pixel-frame {
   position: relative;
-  background: #0b1630;
+  background: linear-gradient(180deg, #1c1415, #120d0e);
   box-shadow:
     -4px 0 0 0 var(--glow),
     4px 0 0 0 var(--glow),
     0 -4px 0 0 var(--glow),
     0 4px 0 0 var(--glow),
-    inset 0 0 0 4px #0a0e18,
-    inset 4px 4px 0 4px rgba(143, 214, 255, 0.12);
+    inset 0 0 0 4px #0b0809,
+    inset 4px 4px 0 4px rgba(230, 194, 122, 0.08),
+    inset -4px -4px 0 4px rgba(0, 0, 0, 0.35);
 }
 .pixel-frame {
   box-shadow:
@@ -82,7 +88,7 @@ body {
     4px 0 0 0 var(--danger),
     0 -4px 0 0 var(--danger),
     0 4px 0 0 var(--danger),
-    inset 0 0 0 4px #0a0e18;
+    inset 0 0 0 4px #0b0809;
 }
 .sys-window.border-ok\/60 {
   box-shadow:
@@ -90,11 +96,11 @@ body {
     4px 0 0 0 var(--ok),
     0 -4px 0 0 var(--ok),
     0 4px 0 0 var(--ok),
-    inset 0 0 0 4px #0a0e18;
+    inset 0 0 0 4px #0b0809;
 }
 
 .pixel-box {
-  background: rgba(10, 14, 24, 0.6);
+  background: rgba(8, 5, 6, 0.55);
   box-shadow:
     -2px 0 0 0 var(--line),
     2px 0 0 0 var(--line),
@@ -128,7 +134,7 @@ select {
 }
 
 .glow-text {
-  text-shadow: 2px 2px 0 #000, 0 0 8px rgba(69, 184, 255, 0.5);
+  text-shadow: 2px 2px 0 #000, 0 0 10px rgba(200, 120, 40, 0.35);
 }
 
 /* ゲージを区切りのあるドット風にする */
@@ -139,7 +145,20 @@ select {
 }
 
 .blessed {
-  filter: drop-shadow(0 0 0 #8fd6ff) drop-shadow(2px 0 0 #45b8ff) drop-shadow(-2px 0 0 #45b8ff);
+  filter: drop-shadow(2px 0 0 #e6c27a) drop-shadow(-2px 0 0 #e6c27a) drop-shadow(0 0 6px rgba(230, 194, 122, 0.6));
+}
+
+/* たいまつの炎のゆらぎ */
+@keyframes flicker {
+  0% { opacity: 1; }
+  33% { opacity: 0.75; }
+  66% { opacity: 0.9; }
+}
+.flicker {
+  animation: flicker 0.6s steps(1) infinite;
+}
+.flicker-slow {
+  animation: flicker 1.3s steps(1) infinite;
 }
 
 @keyframes blink {
@@ -171,12 +190,12 @@ select {
   }
 }
 .bar-fill {
-  background: linear-gradient(90deg, #2b8fd6, #6fd0ff, #2b8fd6);
+  background: linear-gradient(90deg, #7a1a1a, #c8382e, #7a1a1a);
   background-size: 200% 100%;
   animation: bar-shine 3s linear infinite;
 }
 .bar-fill.ok {
-  background: linear-gradient(90deg, #2fbf86, #8affd0, #2fbf86);
+  background: linear-gradient(90deg, #8a6a2a, #e6c27a, #8a6a2a);
   background-size: 200% 100%;
 }
 
@@ -198,7 +217,9 @@ select {
 @media (prefers-reduced-motion: reduce) {
   .animate-sys-in,
   .bar-fill,
-  .blink {
+  .blink,
+  .flicker,
+  .flicker-slow {
     animation: none;
   }
 }

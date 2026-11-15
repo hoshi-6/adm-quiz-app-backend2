@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import { Button, Window, cx } from "@/components/ui";
 import {
   ENCOUNTERS_PER_FLOOR,
@@ -21,7 +21,8 @@ import {
   upgradeCost,
 } from "@/lib/dungeon";
 import { PixelSprite } from "@/components/PixelSprite";
-import { HERO } from "@/lib/sprites";
+import { DEFAULT_AVATAR, buildAvatar } from "@/lib/avatar";
+import { SCENE_H, SCENE_W, sceneFor } from "@/lib/scenes";
 import { type AllyId, ALLIES, chapterLabel, chapterOf } from "@/lib/story";
 import type { GameState } from "@/lib/game";
 import { buyUpgrade, claimIdle, showOpening, dungeonDeath, dungeonKill, setFarm, touchDungeon, unequip, useGame, warpTo } from "@/lib/store";
@@ -136,6 +137,7 @@ function Dungeon({ game }: { game: GameState }) {
 
   const now = r.now;
   const { chapter } = chapterOf(d.floor);
+  const heroSprite = useMemo(() => buildAvatar(game.avatar ?? DEFAULT_AVATAR), [game.avatar]);
   const checkpoints = Array.from({ length: Math.floor((checkpointOf(d.deepest) - 1) / 10) + 1 }, (_, i) => i * 10 + 1);
 
   return (
@@ -169,24 +171,24 @@ function Dungeon({ game }: { game: GameState }) {
       </div>
 
       {/* 戦闘の場面 */}
-      <div className="pixel-frame relative h-64 overflow-hidden" style={{ background: sceneBg(d.floor) }}>
-        <div className="absolute inset-x-0 bottom-0 h-10" style={{ background: groundBg(d.floor) }} />
+      <div className="pixel-frame relative aspect-[3/2] w-full overflow-hidden bg-black">
+        <Scene floor={d.floor} boss={isBossFloor(d.floor)} />
         {/* 主人公と仲間（左）と敵（右） */}
-        <div className="absolute inset-x-3 bottom-7 flex items-end justify-between gap-2">
+        <div className="absolute inset-x-3 bottom-[13%] flex items-end justify-between gap-2">
           <div className="flex min-w-0 items-end gap-1">
             {hero.allies
               .slice()
               .reverse()
               .map((a) => (
                 <div key={a.id} className={cx("flex flex-col items-center transition-transform", now - (r.allyAct[a.id] ?? 0) < 200 && "-translate-y-1")}>
-                  <PixelSprite sprite={a.sprite} scale={2} flip={a.id === "wolf"} />
+                  <PixelSprite sprite={a.sprite} scale={1.5} flip={a.id === "wolf"} />
                   <span className="mt-0.5 text-[9px] text-fg/70">{a.name}</span>
                 </div>
               ))}
             <div className="flex w-16 flex-col items-center">
               <HpBar value={r.heroHp / hero.maxHp} label={`${Math.max(0, Math.ceil(r.heroHp))}`} />
               <div className={cx("mt-1 transition-transform", now - r.heroHit < 150 && "-translate-x-1", r.phase === "fight" && r.heroCd > hero.interval - 150 && "translate-x-2", r.phase === "dead" && "rotate-90 opacity-40")}>
-                <PixelSprite sprite={HERO} scale={4} className={hero.blessed ? "blessed" : undefined} />
+                <PixelSprite sprite={heroSprite} scale={2} className={hero.blessed ? "blessed" : undefined} />
               </div>
               <p className="mt-0.5 max-w-full truncate text-[10px] text-fg/90">{game.playerName}</p>
             </div>
@@ -195,7 +197,7 @@ function Dungeon({ game }: { game: GameState }) {
             <div className="flex w-24 shrink-0 flex-col items-center">
               <HpBar value={r.enemyHp / r.enemy.maxHp} danger label={`${Math.max(0, Math.ceil(r.enemyHp))}`} />
               <div className={cx("mt-1 transition-transform", now - r.enemyHit < 150 && "translate-x-1 brightness-200")}>
-                <PixelSprite sprite={r.enemy.sprite} scale={r.enemy.boss ? 7 : 5} title={r.enemy.name} />
+                <PixelSprite sprite={r.enemy.sprite} scale={r.enemy.boss ? 4 : 3} title={r.enemy.name} />
               </div>
               <p className={cx("mt-0.5 max-w-full truncate text-[10px]", r.enemy.boss ? "text-danger" : "text-fg/90")}>{r.enemy.name}</p>
             </div>
@@ -267,7 +269,7 @@ function Dungeon({ game }: { game: GameState }) {
         </label>
       </div>
 
-      <HeroPanel hero={hero} game={game} />
+      <HeroPanel hero={hero} />
       <Town game={game} />
       <Equipment game={game} />
       <Window title="記録">
@@ -448,26 +450,17 @@ function step(r: Runtime, hero: Hero, game: GameState) {
 
 // ---- 表示の部品 ----
 
-const SCENE = [
-  ["#14181c", "#22282c", "#3a3f38"],
-  ["#16141f", "#262236", "#4a4458"],
-  ["#0f1a12", "#1a2e1c", "#2f4a26"],
-  ["#1f0f0a", "#3a1a10", "#6a2a14"],
-  ["#0c1622", "#16283a", "#5a7a98"],
-  ["#1a0a14", "#2e1024", "#4a1a30"],
-  ["#07061a", "#120f2e", "#2a2050"],
-];
-
-function sceneBg(floor: number) {
-  const [a, b] = SCENE[chapterOf(floor).index];
-  // 横じまの段々グラデーション（ドット風）
-  return `repeating-linear-gradient(0deg, ${a} 0 8px, ${b} 8px 16px)`;
-}
-
-function groundBg(floor: number) {
-  const c = SCENE[chapterOf(floor).index][2];
-  return `repeating-linear-gradient(90deg, ${c} 0 8px, rgba(0,0,0,.35) 8px 10px, ${c} 10px 16px)`;
-}
+/** 階ごとの背景。描くのは階が変わったときだけ */
+const Scene = memo(function Scene({ floor, boss }: { floor: number; boss: boolean }) {
+  const px = useMemo(() => sceneFor(floor, boss), [floor, boss]);
+  return (
+    <svg viewBox={`0 0 ${SCENE_W} ${SCENE_H}`} className="absolute inset-0 h-full w-full" shapeRendering="crispEdges" preserveAspectRatio="xMidYMid slice" aria-hidden>
+      {px.map((p, i) => (
+        <rect key={i} x={p.x} y={p.y} width={p.w} height={p.h} fill={p.c} className={p.cls} />
+      ))}
+    </svg>
+  );
+});
 
 function floatCls(k: Float["kind"]) {
   return {
@@ -494,7 +487,7 @@ function HpBar({ value, label, danger }: { value: number; label: string; danger?
   );
 }
 
-function HeroPanel({ hero, game }: { hero: Hero; game: GameState }) {
+function HeroPanel({ hero }: { hero: Hero }) {
   const rows: [string, string][] = [
     ["HP", hero.maxHp.toLocaleString()],
     ["攻撃", hero.atk.toLocaleString()],
@@ -506,7 +499,14 @@ function HeroPanel({ hero, game }: { hero: Hero; game: GameState }) {
     ["ゴールド", `×${hero.goldMul.toFixed(2)}`],
   ];
   return (
-    <Window title="主人公" right={<span className="font-mono text-xs text-muted">Lv.{game.level}</span>}>
+    <Window
+      title="主人公"
+      right={
+        <Link href="/character" className="text-xs text-glow-strong underline">
+          見た目を変える
+        </Link>
+      }
+    >
       <dl className="grid grid-cols-2 gap-x-4 gap-y-1 text-sm sm:grid-cols-4">
         {rows.map(([k, v]) => (
           <div key={k} className="flex justify-between gap-2 border-b border-line/40 py-0.5">

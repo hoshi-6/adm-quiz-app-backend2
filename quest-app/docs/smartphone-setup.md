@@ -1,7 +1,7 @@
 # スマホでアプリとして使う手順
 
 LEVEL QUEST をインターネット上に公開し、スマホのホーム画面から普通のアプリのように起動できるようにします。
-費用はかかりません（Vercel の無料プランを使います）。AI やデータベースは使わないので、API キーなどの準備も不要です。
+費用はかかりません（Vercel の無料プランを使います）。データベースは使いません。「写真から主人公を作る」機能を使うときだけ Claude の API キーが必要です（使わなければ不要）。
 
 > スマホの「ホーム画面に追加」は **https で公開された URL** でしか使えません。
 > そのため、まず Vercel で公開し、その URL をスマホで開きます。
@@ -17,7 +17,13 @@ LEVEL QUEST をインターネット上に公開し、スマホのホーム画�
    - **Project Name**: `level-quest` など（これが URL の一部になります）
    - **Root Directory**: 「Edit」を押して **`quest-app`** を選ぶ ← **ここが一番大事です**
    - Framework Preset: **Next.js**（自動で選ばれます）
-   - 環境変数（Environment Variables）は**不要**です
+   - 環境変数（Environment Variables）は基本的に**不要**です。
+     「写真から主人公を作る」機能を使う場合だけ、次の2つを追加します（ごはんナビで使っている API キーと同じものでかまいません）。
+
+     | Key | Value |
+     | --- | --- |
+     | `ANTHROPIC_API_KEY` | Claude の API キー（`sk-ant-…`） |
+     | `APP_PASSCODE` | 合言葉（他人にあなたの API キーで AI を使われないようにするため） |
 5. 「Deploy」を押します。1〜2分で完了します。
 6. 表示された URL（例: `https://level-quest.vercel.app`）を控えます。
 
