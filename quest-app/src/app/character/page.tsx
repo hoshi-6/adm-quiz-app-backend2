@@ -135,7 +135,7 @@ function Editor({ initial, name }: { initial: Avatar; name: string }) {
               key: p,
               on: preset === p,
               label: PRESETS[p].name,
-              desc: "描きおろし 64×64・動きあり",
+              desc: p === "blackcoat" ? "あなたのドット絵 64×64" : "描きおろし 64×64・動きあり",
               sprite: heroLook({ ...a, preset: p }).idle[0],
               scale: 1,
               pick: () => setA({ ...a, preset: p }),

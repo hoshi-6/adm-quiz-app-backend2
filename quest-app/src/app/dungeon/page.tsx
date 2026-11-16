@@ -310,7 +310,7 @@ function Actors({ r, hero, game, now, reflection }: { r: Runtime; hero: Hero; ga
           ))}
         <div className={cx("flex w-16 flex-col items-center", hero.allies.length > 0 && "-ml-2")}>
           <div className={cx("transition-transform", now - r.heroHit < 150 && "-translate-x-1", attacking && "translate-x-2", r.phase === "dead" && "rotate-90 opacity-40")}>
-            <PixelSprite sprite={heroSprite} scale={look.scale} className={hero.blessed ? "blessed" : undefined} />
+            <PixelSprite sprite={heroSprite} scale={look.scale} flip={look.flip} className={hero.blessed ? "blessed" : undefined} />
           </div>
           {showUi && <p className="max-w-full truncate text-[10px] text-fg/90">{game.playerName}</p>}
         </div>

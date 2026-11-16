@@ -64,7 +64,7 @@ export type Weapon = keyof typeof WEAPONS;
 export type Preset = "blackcoat" | "wanderer";
 
 export const PRESETS: Record<Preset, { name: string; desc: string }> = {
-  blackcoat: { name: "黒衣の短剣使い", desc: "無造作な黒髪に、裾のほつれたフード付きの黒い外套。一本の短剣で静かに迷宮を進む。" },
+  blackcoat: { name: "黒衣の短剣使い", desc: "無造作な黒髪に、裾のほつれたフード付きの黒い外套。一本の短剣で静かに迷宮を進む。（あなたのドット絵から）" },
   wanderer: { name: "灰の放浪者", desc: "灰銀の髪と左目の古傷、深紅のスカーフ。片手半剣を携えて迷宮を渡り歩く剣士。" },
 };
 
@@ -402,6 +402,8 @@ export function buildAvatar(a: Avatar): Sprite {
 export interface HeroLook {
   idle: [Sprite, Sprite];
   attack: Sprite;
+  /** 戦闘では左右を反転して敵の方（右）を向かせる */
+  flip?: boolean;
   /** 表示倍率（仲間や敵と同じ高さ＝約64ドットになるように。描きおろしは等倍、部品の姿は 32×48 を 1.33 倍） */
   scale: number;
 }
@@ -412,7 +414,7 @@ const builtCache = new Map<string, HeroLook>();
 export function heroLook(a: Avatar | undefined): HeroLook {
   const av = a ?? DEFAULT_AVATAR;
   if (av.preset === "wanderer") return { idle: [WANDERER.idle0, WANDERER.idle1], attack: WANDERER.attack, scale: 1 };
-  if (av.preset === "blackcoat") return { idle: [BLACKCOAT.idle0, BLACKCOAT.idle1], attack: BLACKCOAT.attack, scale: 1 };
+  if (av.preset === "blackcoat") return { idle: [BLACKCOAT.idle0, BLACKCOAT.idle1], attack: BLACKCOAT.attack, scale: 1, flip: true };
   const key = JSON.stringify(av);
   let look = builtCache.get(key);
   if (!look) {
