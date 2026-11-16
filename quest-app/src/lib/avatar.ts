@@ -1,4 +1,5 @@
 // 主人公の見た目（髪型・色・服・武器）を組み合わせてドット絵を作る。16×24 ドット。
+import { BLACKCOAT } from "./blackcoatSprite";
 import { WANDERER } from "./heroSprite";
 import type { Sprite } from "./sprites";
 
@@ -60,9 +61,16 @@ export const OUTFIT_COLORS = {
 export const WEAPONS = { sword: "長剣", dagger: "短剣", axe: "斧", staff: "杖" } as const;
 export type Weapon = keyof typeof WEAPONS;
 
+export type Preset = "blackcoat" | "wanderer";
+
+export const PRESETS: Record<Preset, { name: string; desc: string }> = {
+  blackcoat: { name: "黒衣の短剣使い", desc: "無造作な黒髪に、裾のほつれたフード付きの黒い外套。一本の短剣で静かに迷宮を進む。" },
+  wanderer: { name: "灰の放浪者", desc: "灰銀の髪と左目の古傷、深紅のスカーフ。片手半剣を携えて迷宮を渡り歩く剣士。" },
+};
+
 export interface Avatar {
-  /** "wanderer" = オリジナル主人公「灰の放浪者」（64×64 の描きおろし）。なし = 部品で組み立てた姿 */
-  preset?: "wanderer";
+  /** 描きおろしの主人公（64×64）。"blackcoat" = 黒衣の短剣使い、"wanderer" = 灰の放浪者。なし = 部品で組み立てた姿 */
+  preset?: Preset;
   hairStyle: HairStyle;
   hairColor: keyof typeof HAIR_COLORS;
   skinColor: keyof typeof SKIN_COLORS;
@@ -75,7 +83,7 @@ export interface Avatar {
 }
 
 export const DEFAULT_AVATAR: Avatar = {
-  preset: "wanderer",
+  preset: "blackcoat",
   hairStyle: "short",
   hairColor: "black",
   skinColor: "light",
@@ -404,6 +412,7 @@ const builtCache = new Map<string, HeroLook>();
 export function heroLook(a: Avatar | undefined): HeroLook {
   const av = a ?? DEFAULT_AVATAR;
   if (av.preset === "wanderer") return { idle: [WANDERER.idle0, WANDERER.idle1], attack: WANDERER.attack, scale: 1 };
+  if (av.preset === "blackcoat") return { idle: [BLACKCOAT.idle0, BLACKCOAT.idle1], attack: BLACKCOAT.attack, scale: 1 };
   const key = JSON.stringify(av);
   let look = builtCache.get(key);
   if (!look) {
