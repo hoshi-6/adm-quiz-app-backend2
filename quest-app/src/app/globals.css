@@ -1,0 +1,327 @@
+@import "tailwindcss";
+
+/* システムウィンドウ風の配色（暗い背景に青く光る枠）。この見た目は暗色のみ */
+/* ダークファンタジーの配色：黒に近い背景、くすんだ金と血の赤。この見た目は暗色のみ */
+:root {
+  --bg: #0b0809;
+  --surface: #151011;
+  --subtle: #241a1a;
+  --line: #3e2e2a;
+  --fg: #e8dcc6;
+  --muted: #9a8a76;
+  /* 枠や強調（くすんだ金） */
+  --glow: #9a7a3e;
+  --glow-strong: #e6c27a;
+  --ok: #8ab06a;
+  --gold: #e0b24a;
+  --danger: #c8382e;
+  --blood: #7a1a1a;
+  color-scheme: dark;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surface: var(--surface);
+  --color-subtle: var(--subtle);
+  --color-line: var(--line);
+  --color-fg: var(--fg);
+  --color-muted: var(--muted);
+  --color-glow: var(--glow);
+  --color-glow-strong: var(--glow-strong);
+  --color-ok: var(--ok);
+  --color-gold: var(--gold);
+  --color-danger: var(--danger);
+  --font-sans: var(--font-dot), "Hiragino Sans", "Noto Sans JP", system-ui, sans-serif;
+  --font-mono: var(--font-dot), ui-monospace, Menlo, monospace;
+}
+
+html,
+body {
+  background: var(--bg);
+  color: var(--fg);
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* ---- ドット基調：角丸なし・太字の合成なし・段々の枠 ---- */
+*,
+*::before,
+*::after {
+  border-radius: 0 !important;
+}
+
+body {
+  font-synthesis: none;
+  -webkit-font-smoothing: none;
+  /* 石畳のような薄い格子と、上から差す赤い闇 */
+  background-image:
+    radial-gradient(ellipse 90% 40% at 50% 0%, rgba(122, 26, 26, 0.28), transparent 70%),
+    linear-gradient(rgba(0, 0, 0, 0.35) 2px, transparent 2px),
+    linear-gradient(90deg, rgba(0, 0, 0, 0.35) 2px, transparent 2px);
+  background-size: 100% 100%, 24px 24px, 48px 24px;
+  background-attachment: fixed;
+}
+
+/* 角が欠けた、昔のゲーム機のようなウィンドウ枠 */
+.sys-window,
+.pixel-frame {
+  position: relative;
+  background: linear-gradient(180deg, #1c1415, #120d0e);
+  box-shadow:
+    -4px 0 0 0 var(--glow),
+    4px 0 0 0 var(--glow),
+    0 -4px 0 0 var(--glow),
+    0 4px 0 0 var(--glow),
+    inset 0 0 0 4px #0b0809,
+    inset 4px 4px 0 4px rgba(230, 194, 122, 0.08),
+    inset -4px -4px 0 4px rgba(0, 0, 0, 0.35);
+}
+.pixel-frame {
+  box-shadow:
+    -4px 0 0 0 var(--glow),
+    4px 0 0 0 var(--glow),
+    0 -4px 0 0 var(--glow),
+    0 4px 0 0 var(--glow);
+}
+.sys-window.danger {
+  box-shadow:
+    -4px 0 0 0 var(--danger),
+    4px 0 0 0 var(--danger),
+    0 -4px 0 0 var(--danger),
+    0 4px 0 0 var(--danger),
+    inset 0 0 0 4px #0b0809;
+}
+.sys-window.border-ok\/60 {
+  box-shadow:
+    -4px 0 0 0 var(--ok),
+    4px 0 0 0 var(--ok),
+    0 -4px 0 0 var(--ok),
+    0 4px 0 0 var(--ok),
+    inset 0 0 0 4px #0b0809;
+}
+
+.pixel-box {
+  background: rgba(8, 5, 6, 0.55);
+  box-shadow:
+    -2px 0 0 0 var(--line),
+    2px 0 0 0 var(--line),
+    0 -2px 0 0 var(--line),
+    0 2px 0 0 var(--line);
+}
+
+.pixel-btn {
+  border-width: 0 !important;
+  box-shadow:
+    -2px 0 0 0 currentColor,
+    2px 0 0 0 currentColor,
+    0 -2px 0 0 currentColor,
+    0 2px 0 0 currentColor,
+    inset -3px -3px 0 0 rgba(0, 0, 0, 0.35),
+    inset 3px 3px 0 0 rgba(255, 255, 255, 0.12);
+}
+.pixel-btn:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow:
+    -2px 0 0 0 currentColor,
+    2px 0 0 0 currentColor,
+    0 -2px 0 0 currentColor,
+    0 2px 0 0 currentColor,
+    inset 3px 3px 0 0 rgba(0, 0, 0, 0.35);
+}
+
+input,
+select {
+  box-shadow: inset 2px 2px 0 rgba(0, 0, 0, 0.5);
+}
+
+.glow-text {
+  text-shadow: 2px 2px 0 #000, 0 0 10px rgba(200, 120, 40, 0.35);
+}
+
+/* ゲージを区切りのあるドット風にする */
+.bar-fill,
+.pixel-segments {
+  -webkit-mask: repeating-linear-gradient(90deg, #000 0 6px, transparent 6px 8px);
+  mask: repeating-linear-gradient(90deg, #000 0 6px, transparent 6px 8px);
+}
+
+.blessed {
+  filter: drop-shadow(2px 0 0 #e6c27a) drop-shadow(-2px 0 0 #e6c27a) drop-shadow(0 0 6px rgba(230, 194, 122, 0.6));
+}
+
+/* たいまつの炎のゆらぎ */
+@keyframes flicker {
+  0% { opacity: 1; }
+  33% { opacity: 0.75; }
+  66% { opacity: 0.9; }
+}
+.flicker {
+  animation: flicker 0.6s steps(1) infinite;
+}
+.flicker-slow {
+  animation: flicker 1.3s steps(1) infinite;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+.blink {
+  animation: blink 1s steps(1) infinite;
+}
+
+@keyframes sys-in {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+    filter: brightness(2);
+  }
+}
+.animate-sys-in {
+  animation: sys-in 0.3s steps(4);
+}
+
+@keyframes bar-shine {
+  from {
+    background-position: -200% 0;
+  }
+  to {
+    background-position: 200% 0;
+  }
+}
+.bar-fill {
+  background: linear-gradient(90deg, #7a1a1a, #c8382e, #7a1a1a);
+  background-size: 200% 100%;
+  animation: bar-shine 3s linear infinite;
+}
+.bar-fill.ok {
+  background: linear-gradient(90deg, #8a6a2a, #e6c27a, #8a6a2a);
+  background-size: 200% 100%;
+}
+
+@keyframes dmg-float {
+  from {
+    opacity: 1;
+    transform: translate(-50%, 0) scale(1.15);
+  }
+  to {
+    opacity: 0;
+    transform: translate(-50%, -48px) scale(1);
+  }
+}
+.dmg-float {
+  animation: dmg-float 0.9s steps(8) forwards;
+  text-shadow: 2px 2px 0 #000;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-sys-in,
+  .bar-fill,
+  .blink,
+  .flicker,
+  .flicker-slow {
+    animation: none;
+  }
+}
+
+/* ---- ダンジョン画面の HUD ---- */
+.round,
+.round-btn {
+  border-radius: 9999px !important;
+}
+/* 金の縁取りの丸いボタン */
+.round-btn {
+  background: radial-gradient(circle at 40% 35%, #3a2a24, #120c0d 70%);
+  box-shadow:
+    0 0 0 2px #000,
+    0 0 0 4px #9a7a3e,
+    0 0 0 5px #000,
+    inset 0 -3px 0 rgba(0, 0, 0, 0.5),
+    0 3px 6px rgba(0, 0, 0, 0.6);
+}
+.round-btn:active {
+  transform: translateY(1px);
+}
+.skill-active {
+  box-shadow:
+    0 0 0 2px #000,
+    0 0 0 4px #e6c27a,
+    0 0 0 5px #000,
+    0 0 14px rgba(230, 194, 122, 0.8);
+}
+.hud-bar {
+  background: rgba(8, 5, 6, 0.82);
+  box-shadow:
+    0 0 0 2px #000,
+    inset 0 0 0 1px #3e2e2a;
+}
+/* 両端が斜めに切れた数値の帯 */
+.hud-pill {
+  background: linear-gradient(180deg, rgba(30, 20, 18, 0.92), rgba(8, 5, 6, 0.92));
+  clip-path: polygon(8px 0, calc(100% - 8px) 0, 100% 50%, calc(100% - 8px) 100%, 8px 100%, 0 50%);
+}
+.side-btn {
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(180deg, #2a1e1a, #120c0d);
+  box-shadow:
+    0 0 0 2px #000,
+    0 0 0 4px #5a4630,
+    inset 2px 2px 0 rgba(255, 255, 255, 0.08);
+}
+/* 床に映る影（下ほど消える） */
+.reflection {
+  opacity: 0.28;
+  -webkit-mask: linear-gradient(180deg, #000, transparent 70%);
+  mask: linear-gradient(180deg, #000, transparent 70%);
+  filter: blur(0.4px);
+}
+@keyframes coin-pop {
+  0% {
+    opacity: 0;
+    transform: translate(0, 0);
+  }
+  10% {
+    opacity: 1;
+  }
+  45% {
+    transform: translate(calc(var(--dx) * 0.6), calc(-1 * var(--dy) - 26px));
+  }
+  100% {
+    opacity: 0;
+    transform: translate(var(--dx), 18px);
+  }
+}
+.coin-pop {
+  opacity: 0;
+  animation: coin-pop 0.9s steps(12) forwards;
+}
+@keyframes sheet-in {
+  from {
+    transform: translateY(40px);
+    opacity: 0;
+  }
+}
+.sheet-in {
+  animation: sheet-in 0.2s steps(4);
+}
+@keyframes banner-in {
+  from {
+    transform: scaleY(0);
+  }
+}
+.banner-in {
+  animation: banner-in 0.15s steps(3);
+}
+@media (prefers-reduced-motion: reduce) {
+  .coin-pop,
+  .sheet-in,
+  .banner-in {
+    animation: none;
+  }
+  .coin-pop {
+    display: none;
+  }
+}
